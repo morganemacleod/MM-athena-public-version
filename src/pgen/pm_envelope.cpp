@@ -45,20 +45,20 @@
 Real Interpolate1DArrayEven(Real *x,Real *y,Real x0);
 
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
-		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
 
 void HSEInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+		FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
 void DiodeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		  FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+		  FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
 void DiodeOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		  FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+		  FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
 void FixedBoundary(MeshBlock *pmb, Coordinates *pcoord, AthenaArray<Real> &prim,
-		   FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke);
+		   FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
 
 void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
@@ -1622,7 +1622,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 //  \brief OUTFLOW boundary conditions, outer x1 boundary
 
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
+		    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
 {
   // copy hydro variables into ghost zones, don't allow inflow
   for (int n=0; n<(NHYDRO); ++n) {
@@ -1691,7 +1691,7 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 //   does nothing
 
 void FixedBoundary(MeshBlock *pmb, Coordinates *pcoord, AthenaArray<Real> &prim,
-    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
+    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
 {
   return;
 }
@@ -1700,7 +1700,7 @@ void FixedBoundary(MeshBlock *pmb, Coordinates *pcoord, AthenaArray<Real> &prim,
 
 
 void HSEInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
+		    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
 {
 
  
@@ -1772,7 +1772,7 @@ void HSEInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 //  \brief REFLECTING boundary conditions, inner x2 boundary
 
 void DiodeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
+     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
 {
   // copy hydro variables into ghost zones, reflecting v2
   for (int n=0; n<(NHYDRO); ++n) {
@@ -1832,7 +1832,7 @@ void DiodeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 //  \brief REFLECTING boundary conditions, outer x2 boundary
 
 void DiodeOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke)
+     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
 {
   // copy hydro variables into ghost zones, reflecting v2
   for (int n=0; n<(NHYDRO); ++n) {
