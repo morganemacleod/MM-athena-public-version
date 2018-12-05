@@ -392,6 +392,9 @@ int main(int argc, char *argv[]) {
       ptlist->DoTaskListOneStage(pmesh, stage);
     }
 
+    //MM: adding a call to the MeshUserWorkInLoop                                                 
+    pmesh->MeshUserWorkInLoop(pinput);
+    
     pmesh->ncycle++;
     pmesh->time += pmesh->dt;
 

@@ -197,7 +197,9 @@ public:
   MeshBlock* FindMeshBlock(int tgid);
   void ApplyUserWorkBeforeOutput(ParameterInput *pin);
   void UserWorkAfterLoop(ParameterInput *pin); // method in ../pgen
+  void MeshUserWorkInLoop(ParameterInput *pin); // MM: in ../pgen
 
+  
 private:
   // data
   int root_level, max_level, current_level;

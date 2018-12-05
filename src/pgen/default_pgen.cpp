@@ -62,6 +62,19 @@ void __attribute__((weak)) MeshBlock::UserWorkInLoop(void) {
 }
 
 //========================================================================================
+// MM:
+//! \fn void MeshBlock::MeshUserWorkInLoop(void)
+//  \brief Function called once every time step for user-defined work.
+//========================================================================================
+
+void __attribute__((weak)) Mesh::MeshUserWorkInLoop(ParameterInput *pin)
+{
+  // do nothing
+  return;
+}
+
+
+//========================================================================================
 //! \fn void MeshBlock::UserWorkBeforeOutput(ParameterInput *pin)
 //  \brief Function called before generating output files
 //========================================================================================

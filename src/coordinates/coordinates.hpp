@@ -43,6 +43,8 @@ public:
   AthenaArray<Real> h2f,dh2fd1,h31f,h32f,dh31fd1,dh32fd2;
   AthenaArray<Real> h2v,dh2vd1,h31v,h32v,dh31vd1,dh32vd2;
 
+  AthenaArray<Real> coord_src1_i_; //MM: expose this publically
+
   // functions...
   // ...to compute length of edges
   virtual void Edge1Length(const int k, const int j, const int il, const int iu,
@@ -209,7 +211,7 @@ protected:
   AthenaArray<Real> coord_width3_kji_;
   AthenaArray<Real> coord_src_j1_, coord_src_j2_;
   AthenaArray<Real> coord_src_kji_;
-  AthenaArray<Real> coord_src1_i_;
+  //AthenaArray<Real> coord_src1_i_; //MM: expose this publically
   AthenaArray<Real> coord_src1_j_;
   AthenaArray<Real> coord_src2_i_;
   AthenaArray<Real> coord_src2_j_;
