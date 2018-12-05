@@ -140,7 +140,8 @@ typedef void (*BValFunc_t)(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &
                            int is, int ie, int js, int je, int ks, int ke, int ngh);
 typedef int (*AMRFlagFunc_t)(MeshBlock *pmb);
 typedef Real (*MeshGenFunc_t)(Real x, RegionSize rs);
-typedef void (*SrcTermFunc_t)(MeshBlock *pmb, const Real time, const Real dt,
+//MM: adding flux to usersourceterm
+typedef void (*SrcTermFunc_t)(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 typedef Real (*TimeStepFunc_t)(MeshBlock *pmb);
 typedef Real (*HistoryOutputFunc_t)(MeshBlock *pmb, int iout);
