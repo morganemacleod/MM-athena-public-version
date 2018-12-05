@@ -86,6 +86,8 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) {
   nreal_user_mesh_data_=0;
   nuser_history_output_=0;
 
+  user_force_output=false; //MM: flag to force output by user 
+
   // read number of OpenMP threads for mesh
   num_mesh_threads_ = pin->GetOrAddInteger("mesh","num_threads",1);
   if (num_mesh_threads_ < 1) {

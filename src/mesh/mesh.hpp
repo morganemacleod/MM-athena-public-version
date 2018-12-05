@@ -187,6 +187,9 @@ public:
   AthenaArray<Real> *ruser_mesh_data;
   AthenaArray<int> *iuser_mesh_data;
 
+  bool user_force_output; //MM: make a flag to force output 
+
+  
   // functions
   void Initialize(int res_flag, ParameterInput *pin);
   void SetBlockSizeAndBoundaries(LogicalLocation loc, RegionSize &block_size,

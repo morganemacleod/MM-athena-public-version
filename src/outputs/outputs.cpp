@@ -661,6 +661,7 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
     if ((pm->time == pm->start_time) ||
         (pm->time >= ptype->output_params.next_time) ||
         (pm->time >= pm->tlim) ||
+	(pm->user_force_output &&  ptype->output_params.dt == 999.) || //MM:allow user condition to force output if dt=999.
         (wtflag==true && ptype->output_params.file_type=="rst")) {
       if (first && ptype->output_params.file_type!="hst") {
         pm->ApplyUserWorkBeforeOutput(pin);
@@ -670,6 +671,7 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
     }
     ptype = ptype->pnext_type; // move to next OutputType in list
   }
+  pm->user_force_output=false; //MM:reset the user_force_output flag
 }
 
 //----------------------------------------------------------------------------------------
