@@ -189,7 +189,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "Omega_orb="<< Omega_orb << "\n";
     std::cout << "a = "<< sma <<"\n";
     std::cout << "e = "<< ecc <<"\n";
-    std::cout << "P = "<< 6.2832*sqrt(sma*sma*sma/(GM1+GM2+GMenv)) << "\n";
+    std::cout << "P = "<< 6.2832*sqrt(sma*sma*sma/(GM1+GM2)) << "\n";
     std::cout << "rsoft2 ="<<rsoft2<<"\n";
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
@@ -424,7 +424,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     
   // EVOLVE THE ORBITAL POSITION OF THE SECONDARY
   // do this on rank zero, then broadcast
-  if (Globals::my_rank == 0 && time>t_relax){
+  if (Globals::my_rank == 0){
     if(fixed_orbit){
       Real theta_orb = Omega_orb_fixed*time;
       xi[0] = sma_fixed*std::cos(theta_orb);
