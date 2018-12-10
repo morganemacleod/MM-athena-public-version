@@ -1,0 +1,78 @@
+<job>
+problem_id = PLANET      # problem ID: basename of output filenames
+
+
+<output1>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 30.0       # time increment between outputs
+xdmf = 0
+x2_slice = 1.5707963267948966
+
+<output2>
+file_type  = hst      # history
+dt         = 1000.      # time increment between outputs
+
+<output3>
+file_type  = rst      # restart
+dt         = 30000000.0     # time increment between outputs
+
+
+<time>
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 1.e7       # time limit
+
+<mesh>
+nx1        = 64         # Number of zones in X1-direction
+x1rat      = 1.0229993616890707       # ratio between adjacent cell sizes
+x1min      = 7.e10        # minimum value of X1
+x1max      = 3.e11        # maximum value of X1
+ix1_bc     = reflecting    # inner-X1 boundary flag
+ox1_bc     = outflow    # outer-X1 boundary flag
+
+nx2        = 4             # Number of zones in X2-direction
+x2min      = 1.37444678595            # minimum value of X2
+x2max      = 1.76714586764  #3.141592653589793   # maximum value of X2
+ix2_bc     = outflow        # inner-X2 boundary flag
+ox2_bc     = outflow        # outer-X2 boundary flag
+
+nx3        = 128          # Number of zones in X3-direction
+x3min      = -3.141592653589793 # minimum value of X3
+x3max      =  3.141592653589793 # maximum value of X3
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
+
+refinement     = static
+
+
+<meshblock>
+nx1        = 64        # Number of zones per MeshBlock in X1-direction
+nx2        = 4         # Number of zones per MeshBlock in X2-direction
+nx3        = 32         # Number of zones per MeshBlock in X3-direction
+
+<hydro>
+gamma           = 1.6666666666666667  # gamma = C_p/C_v
+##iso_sound_speed = 1.0
+dfloor = 1.e-30
+pfloor = 1.e-30
+
+polar_average = false
+
+
+<problem>
+Ggrav           = 6.674e-8
+M1              = 1.989e33
+M2              = 1.989e32
+rsoft2          = 1.e10
+sma             = 1.e11
+ecc             = 0.0 
+
+pamb          = 8.e-7            # ambient pressure
+damb          = 1.e-20
+
+corotating_frame = 1 # flag whether to do simulation in frame that rotates around COM at initial orbital frequency
+
+n_particle_substeps = 1 # how many particle integration substeps per timestep?
+
+trackfile_dt = 1.e-2

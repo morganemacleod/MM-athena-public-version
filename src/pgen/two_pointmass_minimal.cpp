@@ -94,8 +94,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   gamma_gas = pin->GetReal("hydro","gamma");
 
   Ggrav = pin->GetOrAddReal("problem","Ggrav",6.67408e-8);
-  GM2 = pin->GetOrAddReal("problem","M2",0.0)*Ggrav;
-  GM1 = pin->GetOrAddReal("problem","M1",1.0)*Ggrav;
+  GM2 = pin->GetOrAddReal("problem","GM2",0.0);
+  GM1 = pin->GetOrAddReal("problem","GM1",1.0);
 
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   corotating_frame = pin->GetInteger("problem","corotating_frame");
