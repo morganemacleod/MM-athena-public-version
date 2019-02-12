@@ -7,3 +7,8 @@ python configure.py --prob pm_envelope --coord spherical_polar --eos adiabatic -
 
 INTERACTIVE JOB:
 qsub -I -q devel -lselect=1:ncpus=28:model=bro,walltime=1:00:00
+
+
+
+EXAMPLE LAPTOP polytrope config:
+python configure.py --prob polytrope --eos adiabatic --coord cartesian --flux hllc -mpi -fft --grav fft --fftw_path /opt/local -hdf5 --hdf5_path /opt/local --cxx g++ 
