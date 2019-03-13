@@ -1,6 +1,9 @@
 COMPILE OPTIONS:
 -O3 -ipo -axCORE-AVX2 -xSSE4.2 -lmpi
 
+DISABLE WARNINGS:
+-w -vec-report0 -opt-report0
+
 CONFIGURE:
 python configure.py --prob pm_envelope --coord spherical_polar --eos adiabatic --flux hllc -mpi --cxx icc -hdf5 --ccmd icc
 
