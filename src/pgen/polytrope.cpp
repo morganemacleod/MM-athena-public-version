@@ -75,8 +75,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   Real four_pi_G = 12.566370614359172*Ggrav;
   Real eps = pin->GetOrAddReal("problem","grav_eps", 0.0);
+  Real dens_mean =  pin->GetReal("problem","dens_mean");
   SetFourPiG(four_pi_G);
   SetGravityThreshold(eps);
+  SetMeanDensity(dens_mean);
+  
 
 
   // read in profile arrays from file
@@ -86,8 +89,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     //std:: cout << rad[i] << "    " << rho[i] << std::endl;
   }
   infile.close();
-    
 
+
+
+  
+ 
 
 } // end
 
