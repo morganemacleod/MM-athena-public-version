@@ -48,9 +48,9 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
-void ParticleAccels(Real (&xi_a)[3],Real (&xi_b)[3],Real (&vi_a)[3],Real (&vi_b)[3],Real (&ai_a)[3],Real (&ai_b)[3]);
+void ParticleAccels(Real (&x1i)[3],Real (&x2i)[3],Real (&v1i)[3],Real (&v2i)[3],Real (&a1i)[3],Real (&a2i)[3]);
 
-void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1i)[3], Real (&ag2i_a)[3],Real (&ag2i_b)[3]);
+void SumGasOnParticleAccels(Mesh *pm, Real (&x1i)[3],Real (&x2i)[3],Real (&ag1i)[3], Real (&ag2i)[3]);
 
 void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
 void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
@@ -64,8 +64,8 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
 Real GetGM2factor(Real time);
 
 void SumComPosVel(Mesh *pm,
-		  Real (&xi_a)[3], Real (&xi_b)[3],
-		  Real (&vi_a)[3], Real (&vi_b)[3],
+		  Real (&x1i)[3], Real (&x2i)[3],
+		  Real (&v1i)[3], Real (&v2i)[3],
 		  Real (&xgcom)[3],Real (&vgcom)[3],
 		  Real (&xcom)[3],Real (&vcom)[3],
 		  Real &mg);
@@ -78,22 +78,19 @@ void SumComPosVel(Mesh *pm,
 Real fspline(Real r, Real eps);
 
 
-
-//Real UpdatePMTimestep(MeshBlock *pmb);
-
 // global (to this file) problem parameters
 Real gamma_gas; 
 Real da,pa; // ambient density, pressure
 Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc[NARRAY];  // initial profile
 
-Real GM2a,GM2b, GM1; // point masses
+Real GM1,GM2; // point masses
 Real rsoft2; // softening length of PM 2
 Real t_relax,t_mass_on; // time to damp fluid motion, time to turn on M2 over
 int  include_gas_backreaction, corotating_frame; // flags for output, gas backreaction on EOM, frame choice
 int n_particle_substeps; // substepping of particle integration
 
-Real xi_a[3], vi_a[3],xi_b[3], vi_b[3];  // cartesian positions/vels of the secondary object
-Real agas1i[3], agas2i_a[3], agas2i_b[3]; //  gas->particle acceleration
+Real x1i[3], v1i[3],x2i[3], v2i[3];  // cartesian positions/vels of the secondary object
+Real agas1i[3], agas2i[3]; //  gas->particle acceleration
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xgcom[3], vgcom[3]; // cartesian pos/vel of the COM of the gas
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
@@ -137,10 +134,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   gamma_gas = pin->GetReal("hydro","gamma");
 
   Ggrav = pin->GetOrAddReal("problem","Ggrav",6.67408e-8);
-  GM2a = pin->GetReal("problem","GM2a");
-  GM2b = pin->GetReal("problem","GM2b");
+
+  GM1 = pin->GetReal("problem","GM1");
+  GM2 = pin->GetReal("problem","GM2");
   
-  //GM1 = pin->GetOrAddReal("problem","GM1",1.0);
 
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
@@ -257,27 +254,27 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   }
     
 
+  Real GMtot = GM1+GM2+GMenv;
   //ONLY enter ICs loop if this isn't a restart
   if(time==0){
     // set the initial conditions for the pos/vel of the secondary
-    xi_a[0] = sma*(1.0 + ecc) - GM2b/(GM2a+GM2b)*sma2*(1.0+ecc2);  // apocenter
-    xi_a[1] = 0.0;
-    xi_a[2] = 0.0;
-    xi_b[0] = sma*(1.0 + ecc) + GM2a/(GM2a+GM2b)*sma2*(1.0+ecc2);  // apocenter
-    xi_b[1] = 0.0;
-    xi_b[2] = 0.0;
+    x1i[0] = -GM2/GMtot * sma*(1.0 + ecc);  // apocenter
+    x1i[1] = 0.0;
+    x1i[2] = 0.0;
+    x2i[0] = (GM1+GMenv)/GMtot * sma*(1.0 + ecc);  // apocenter
+    x2i[1] = 0.0;
+    x2i[2] = 0.0;
     
     //Real vcirc = sqrt((GM1+GM2)/sma + accel*sma);    
-    vcirc = sqrt((GM1+GM2a+GM2b+GMenv)/sma);
+    vcirc = sqrt(GMtot/sma);
     Omega_orb = vcirc/sma;
-    Real vcirc2 = sqrt((GM2a+GM2b)/sma2);
     
-    vi_a[0] = 0.0;
-    vi_a[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ) - GM2b/(GM2a+GM2b)*sqrt( vcirc2*vcirc2*(1.0 - ecc2)/(1.0 + ecc2) ); //v_apocenter
-    vi_a[2] = 0.0;
-    vi_b[0] = 0.0;
-    vi_b[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ) + GM2a/(GM2a+GM2b)*sqrt( vcirc2*vcirc2*(1.0 - ecc2)/(1.0 + ecc2) );; //v_apocenter
-    vi_b[2] = 0.0;
+    v1i[0] = 0.0;
+    v1i[1]= -GM2/GMtot * sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ) ; //v_apocenter
+    v1i[2] = 0.0;
+    v2i[0] = 0.0;
+    v2i[1]= (GM1+GMenv)/GMtot * sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ) ; //v_apocenter
+    v2i[2] = 0.0;
     
     // now set the initial condition for Omega
     Omega[0] = 0.0;
@@ -288,8 +285,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     // subtract off the frame velocity and set Omega
     if(corotating_frame == 1){
       Omega[2] = Omega_orb;
-      vi_a[1] -=  Omega[2]*sma;
-      vi_b[1] -=  Omega[2]*sma; 
+      v1i[1] -=  Omega[2]*sma;
+      v2i[1] -=  Omega[2]*sma; 
     }
     
     
@@ -303,11 +300,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
     // save the ruser_mesh_data variables
     for(int i=0; i<3; i++){
-      ruser_mesh_data[0](i)  = xi_a[i];
-      ruser_mesh_data[1](i)  = vi_a[i];
+      ruser_mesh_data[0](i)  = x1i[i];
+      ruser_mesh_data[1](i)  = v1i[i];
       ruser_mesh_data[2](i)  = Omega[i];
-      ruser_mesh_data[3](i)  = xi_b[i];
-      ruser_mesh_data[4](i)  = vi_b[i];
+      ruser_mesh_data[3](i)  = x2i[i];
+      ruser_mesh_data[4](i)  = v2i[i];
     }
 
     // Decide whether to do pre-integration
@@ -329,8 +326,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
     std::cout << "GM1 = "<< GM1 <<"\n";
-    std::cout << "GM2a = "<< GM2a <<"\n";
-    std::cout << "GM2b = "<< GM2b <<"\n";
+    std::cout << "GM2 = "<< GM2 <<"\n";
     std::cout << "GMenv="<< GMenv << "\n";
     std::cout << "GMenv/r^2, g_accel = " << GMenv/(sma*sma) << "  "<< accel << "\n";
     std::cout << "Omega_orb="<< Omega_orb << "\n";
@@ -339,8 +335,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "a2 = "<< sma2 <<"\n";
     std::cout << "e = "<< ecc <<"\n";
     std::cout << "e2 = "<< ecc2 <<"\n";
-    std::cout << "P = " << 6.2832*sqrt(sma*sma*sma/(GM1+GM2a+GM2b+GMenv)) << "\n";
-    std::cout << "P2 = "<< 6.2832*sqrt(sma2*sma2*sma2/(GM2a+GM2b)) << "\n";
+    std::cout << "P = " << 6.2832*sqrt(sma*sma*sma/(GM1+GM2+GMenv)) << "\n";
     std::cout << "rsoft2 ="<<rsoft2<<"\n";
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "gas backreaction? = "<< include_gas_backreaction<<"\n";
@@ -352,18 +347,18 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
       std::cout << "==========================================================\n";
       std::cout << "==========   Particles       =============================\n";
       std::cout << "==========================================================\n";
-      std::cout << "xa ="<<xi_a[0]<<"\n";
-      std::cout << "ya ="<<xi_a[1]<<"\n";
-      std::cout << "za ="<<xi_a[2]<<"\n";
-      std::cout << "vxa ="<<vi_a[0]<<"\n";
-      std::cout << "vya ="<<vi_a[1]<<"\n";
-      std::cout << "vza ="<<vi_a[2]<<"\n";
-      std::cout << "xb ="<<xi_b[0]<<"\n";
-      std::cout << "yb ="<<xi_b[1]<<"\n";
-      std::cout << "zb ="<<xi_b[2]<<"\n";
-      std::cout << "vxb ="<<vi_b[0]<<"\n";
-      std::cout << "vyb ="<<vi_b[1]<<"\n";
-      std::cout << "vzb ="<<vi_b[2]<<"\n";
+      std::cout << "x1 ="<<x1i[0]<<"\n";
+      std::cout << "y1 ="<<x1i[1]<<"\n";
+      std::cout << "z1 ="<<x1i[2]<<"\n";
+      std::cout << "vx1 ="<<v1i[0]<<"\n";
+      std::cout << "vy1 ="<<v1i[1]<<"\n";
+      std::cout << "vz1 ="<<v1i[2]<<"\n";
+      std::cout << "x2 ="<<x2i[0]<<"\n";
+      std::cout << "y2 ="<<x2i[1]<<"\n";
+      std::cout << "z2 ="<<x2i[2]<<"\n";
+      std::cout << "vx2 ="<<v2i[0]<<"\n";
+      std::cout << "vy2 ="<<v2i[1]<<"\n";
+      std::cout << "vz2 ="<<v2i[2]<<"\n";
       std::cout << "==========================================================\n";
     }
   }
@@ -405,22 +400,22 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
   if(is_restart>0){
     // else this is a restart, read the current particle state
     for(int i=0; i<3; i++){
-      xi_a[i]    = pmb->pmy_mesh->ruser_mesh_data[0](i);
-      vi_a[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
+      x1i[i]    = pmb->pmy_mesh->ruser_mesh_data[0](i);
+      v1i[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
       Omega[i]   = pmb->pmy_mesh->ruser_mesh_data[2](i);
-      xi_b[i]    = pmb->pmy_mesh->ruser_mesh_data[3](i);
-      vi_b[i]    = pmb->pmy_mesh->ruser_mesh_data[4](i);
+      x2i[i]    = pmb->pmy_mesh->ruser_mesh_data[3](i);
+      v2i[i]    = pmb->pmy_mesh->ruser_mesh_data[4](i);
     }
     // print some info
     if (Globals::my_rank==0){
       std::cout << "====================================================\n";
       std::cout << "*** Setting initial conditions for t>0 ***\n";
       std::cout << "====================================================\n";
-      std::cout <<"xi_a="<<xi_a[0]<<" "<<xi_a[1]<<" "<<xi_a[2]<<"\n";
-      std::cout <<"vi_a="<<vi_a[0]<<" "<<vi_a[1]<<" "<<vi_a[2]<<"\n";
+      std::cout <<"x1i="<<x1i[0]<<" "<<x1i[1]<<" "<<x1i[2]<<"\n";
+      std::cout <<"v1i="<<v1i[0]<<" "<<v1i[1]<<" "<<v1i[2]<<"\n";
       std::cout <<"Omega="<<Omega[0]<<" "<<Omega[1]<<" "<<Omega[2]<<"\n";
-      std::cout <<"xi_b="<<xi_b[0]<<" "<<xi_b[1]<<" "<<xi_b[2]<<"\n";
-      std::cout <<"vi_b="<<vi_b[0]<<" "<<vi_b[1]<<" "<<vi_b[2]<<"\n";
+      std::cout <<"x2i="<<x2i[0]<<" "<<x2i[1]<<" "<<x2i[2]<<"\n";
+      std::cout <<"v2i="<<v2i[0]<<" "<<v2i[1]<<" "<<v2i[2]<<"\n";
       std::cout << "====================================================\n";
     }
     is_restart=0;
@@ -444,110 +439,41 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 
   // Gravitational acceleration from orbital motion
   for (int k=pmb->ks; k<=pmb->ke; k++) {
-    Real ph= pmb->pcoord->x3v(k);
-    Real sin_ph = sin(ph);
-    Real cos_ph = cos(ph);
+    Real z= pmb->pcoord->x3v(k);
     for (int j=pmb->js; j<=pmb->je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      Real cos_th = cos(th);
+      Real y= pmb->pcoord->x2v(j);
       for (int i=pmb->is; i<=pmb->ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-
-	// spherical polar coordinates, get local cartesian           
-	Real x = r*sin_th*cos_ph;
-	Real y = r*sin_th*sin_ph;
-	Real z = r*cos_th;
+	Real x = pmb->pcoord->x1v(i);
 
 	// current position of the secondary
-	Real d12c_a = pow(xi_a[0]*xi_a[0] + xi_a[1]*xi_a[1] + xi_a[2]*xi_a[2], 1.5);
-	Real d12c_b = pow(xi_b[0]*xi_b[0] + xi_b[1]*xi_b[1] + xi_b[2]*xi_b[2], 1.5);
+	Real d12c_a = pow(x1i[0]*x1i[0] + x1i[1]*x1i[1] + x1i[2]*x1i[2], 1.5);
+	Real d12c_b = pow(x2i[0]*x2i[0] + x2i[1]*x2i[1] + x2i[2]*x2i[2], 1.5);
 
 	// distances to zone
-	Real d2_a  = sqrt(pow(x-xi_a[0], 2) +
-			  pow(y-xi_a[1], 2) +
-			  pow(z-xi_a[2], 2) );
-	Real d2_b  = sqrt(pow(x-xi_b[0], 2) +
-			  pow(y-xi_b[1], 2) +
-			  pow(z-xi_b[2], 2) );
+	Real d1  = sqrt(pow(x-x1i[0], 2) +
+			pow(y-x1i[1], 2) +
+			pow(z-x1i[2], 2) );
+	Real d2  = sqrt(pow(x-x2i[0], 2) +
+			pow(y-x2i[1], 2) +
+			pow(z-x2i[2], 2) );
   
 	//
 	//  COMPUTE ACCELERATIONS 
 	//
-	// PM1
-	Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
-	Real a_r1 = -GMenc1*pmb->pcoord->coord_src1_i_(i)/r;
-	
-	// PM2 gravitational accels in cartesian coordinates
-	Real a_x = - GM2a*GM2_factor*fspline(d2_a,rsoft2)*(x-xi_a[0]) - GM2b*GM2_factor*fspline(d2_b,rsoft2)*(x-xi_b[0]);   
-	Real a_y = - GM2a*GM2_factor*fspline(d2_a,rsoft2)*(y-xi_a[1]) - GM2b*GM2_factor*fspline(d2_b,rsoft2)*(y-xi_b[1]);  
-	Real a_z = - GM2a*GM2_factor*fspline(d2_a,rsoft2)*(z-xi_a[2]) - GM2b*GM2_factor*fspline(d2_b,rsoft2)*(z-xi_b[2]);
-	
-	// add the correction for the orbiting frame (relative to the COM)
-	a_x += - GM2a*GM2_factor / d12c_a * xi_a[0] - GM2b*GM2_factor / d12c_b * xi_b[0];
-	a_y += - GM2a*GM2_factor / d12c_a * xi_a[1] - GM2b*GM2_factor / d12c_b * xi_b[1];
-	a_z += - GM2a*GM2_factor / d12c_a * xi_a[2] - GM2b*GM2_factor / d12c_b * xi_b[2];
+	// PM1,2 gravitational accels in cartesian coordinates
+	Real a_x = - GM1*fspline(d1,rsoft2)*(x-x1i[0]) - GM2*GM2_factor*fspline(d2,rsoft2)*(x-x2i[0]);   
+	Real a_y = - GM1*fspline(d1,rsoft2)*(y-x1i[1]) - GM2*GM2_factor*fspline(d2,rsoft2)*(y-x2i[1]);  
+	Real a_z = - GM1*fspline(d1,rsoft2)*(z-x1i[2]) - GM2*GM2_factor*fspline(d2,rsoft2)*(z-x2i[2]);
 
-	// add the gas acceleration of the frame of ref
-	a_x += -agas1i[0];
-	a_y += -agas1i[1];
-	a_z += -agas1i[2];    
-	
-	
-	if(corotating_frame == 1){
-	  
-	  Real vr  = prim(IVX,k,j,i);
-	  Real vth = prim(IVY,k,j,i);
-	  Real vph = prim(IVZ,k,j,i);
-	  
-	  // distance from the origin in cartesian (vector)
-	  Real rxyz[3];
-	  rxyz[0] = x;
-	  rxyz[1] = y;
-	  rxyz[2] = z;
-	  
-	  // get the cartesian velocities from the spherical (vector)
-	  Real vgas[3];
-	  vgas[0] = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
-	  vgas[1] = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
-	  vgas[2] = cos_th*vr - sin_th*vth;
-	  
-	  // add the centrifugal and coriolis terms
-	  
-	  // centrifugal
-	  Real Omega_x_r[3], Omega_x_Omega_x_r[3];
-	  cross(Omega,rxyz,Omega_x_r);
-	  cross(Omega,Omega_x_r,Omega_x_Omega_x_r);
-	  
-	  a_x += - Omega_x_Omega_x_r[0];
-	  a_y += - Omega_x_Omega_x_r[1];
-	  a_z += - Omega_x_Omega_x_r[2];
-	  
-	  // coriolis
-	  Real Omega_x_v[3];
-	  cross(Omega,vgas,Omega_x_v);
-	  
-	  a_x += -2.0*Omega_x_v[0];
-	  a_y += -2.0*Omega_x_v[1];
-	  a_z += -2.0*Omega_x_v[2];
-	}
-	
-	// convert back to spherical
-	Real a_r  = sin_th*cos_ph*a_x + sin_th*sin_ph*a_y + cos_th*a_z;
-	Real a_th = cos_th*cos_ph*a_x + cos_th*sin_ph*a_y - sin_th*a_z;
-	Real a_ph = -sin_ph*a_x + cos_ph*a_y;
-	
-	// add the PM1 accel
-	a_r += a_r1;
 	
 	//
 	// ADD SOURCE TERMS TO THE GAS MOMENTA/ENERGY
 	//
 	Real den = prim(IDN,k,j,i);
 	
-	Real src_1 = dt*den*a_r; 
-	Real src_2 = dt*den*a_th;
-	Real src_3 = dt*den*a_ph;
+	Real src_1 = dt*den*a_x; 
+	Real src_2 = dt*den*a_y;
+	Real src_3 = dt*den*a_z;
 	
 	// add the source term to the momenta  (source = - rho * a)
 	cons(IM1,k,j,i) += src_1;
@@ -556,10 +482,10 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	
 	// update the energy (source = - rho v dot a)
 	//cons(IEN,k,j,i) += src_1*prim(IVX,k,j,i) + src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
-	cons(IEN,k,j,i) += src_1/den * 0.5*(flux[X1DIR](IDN,k,j,i) + flux[X1DIR](IDN,k,j,i+1));
+	//cons(IEN,k,j,i) += src_1/den * 0.5*(flux[X1DIR](IDN,k,j,i) + flux[X1DIR](IDN,k,j,i+1));
 	//cons(IEN,k,j,i) += src_2/den * 0.5*(flux[X2DIR](IDN,k,j,i) + flux[X2DIR](IDN,k,j+1,i)); //not sure why this seg-faults
 	//cons(IEN,k,j,i) += src_3/den * 0.5*(flux[X3DIR](IDN,k,j,i) + flux[X3DIR](IDN,k+1,j,i));
-	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
+	cons(IEN,k,j,i) +=  src_1*prim(IVX,k,j,i) + src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
       }
     }
@@ -699,7 +625,7 @@ void MeshBlock::UserWorkInLoop(void)
 
 void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
-  Real ai_a[3],ai_b[3];
+  Real a1i[3],a2i[3];
   Real mg;
 
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
@@ -709,12 +635,12 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
     // first sum the gas accel if needed
     if(include_gas_backreaction == 1){
-      SumGasOnParticleAccels(pblock->pmy_mesh, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
+      SumGasOnParticleAccels(pblock->pmy_mesh, x1i,x2i,agas1i,agas2i);
     }
 
-    ParticleAccels(xi_a,xi_b,vi_a,vi_b,ai_a,ai_b);
-    kick(-0.5*dt,xi_a,vi_a,ai_a);
-    kick(-0.5*dt,xi_b,vi_b,ai_b);
+    ParticleAccels(x1i,x2i,v1i,v2i,a1i,a2i);
+    kick(-0.5*dt,x1i,v1i,a1i);
+    kick(-0.5*dt,x2i,v2i,a2i);
 
     // Integrate from apocenter to separation_start
     if( do_pre_integrate ) {
@@ -765,33 +691,33 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   if (Globals::my_rank == 0 && time>t_relax){
     for (int ii=1; ii<=n_particle_substeps; ii++) {
       // add the particle acceleration to ai
-      ParticleAccels(xi_a,xi_b,vi_a,vi_b,ai_a,ai_b);
+      ParticleAccels(x1i,x2i,v1i,v2i,a1i,a2i);
       // advance the particle
-      particle_step(dt/n_particle_substeps,xi_a,vi_a,ai_a);
-      particle_step(dt/n_particle_substeps,xi_b,vi_b,ai_b);
+      particle_step(dt/n_particle_substeps,x1i,v1i,a1i);
+      particle_step(dt/n_particle_substeps,x2i,v2i,a2i);
     }
   }
   
 #ifdef MPI_PARALLEL
   // broadcast the position update from proc zero
-  MPI_Bcast(xi_a,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(xi_b,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(vi_a,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(vi_b,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(x1i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(x2i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(v1i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(v2i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
 
   // update the ruser_mesh_data variables
   for(int i=0; i<3; i++){
-    ruser_mesh_data[0](i)  = xi_a[i];
-    ruser_mesh_data[1](i)  = vi_a[i];
+    ruser_mesh_data[0](i)  = x1i[i];
+    ruser_mesh_data[1](i)  = v1i[i];
     ruser_mesh_data[2](i)  = Omega[i];
-    ruser_mesh_data[3](i)  = xi_b[i];
-    ruser_mesh_data[4](i)  = vi_b[i];
+    ruser_mesh_data[3](i)  = x2i[i];
+    ruser_mesh_data[4](i)  = v2i[i];
   }
 
   // check the separation stopping conditions
-  Real da = sqrt(xi_a[0]*xi_a[0] + xi_a[1]*xi_a[1] + xi_a[2]*xi_a[2] );
-  Real db = sqrt(xi_b[0]*xi_b[0] + xi_b[1]*xi_b[1] + xi_b[2]*xi_b[2] );
+  Real da = sqrt(x1i[0]*x1i[0] + x1i[1]*x1i[1] + x1i[2]*x1i[2] );
+  Real db = sqrt(x2i[0]*x2i[0] + x2i[1]*x2i[1] + x2i[2]*x2i[2] );
   Real d = std::min(da,db);
   if (d<separation_stop_min){ 
     if (Globals::my_rank == 0) {
@@ -813,13 +739,13 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
-    SumGasOnParticleAccels(pblock->pmy_mesh, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
+    SumGasOnParticleAccels(pblock->pmy_mesh, x1i,x2i,agas1i,agas2i);
   }
   
   
   // write the output to the trackfile
   if(time >= trackfile_next_time){
-    SumComPosVel(pblock->pmy_mesh, xi_a,xi_b, vi_a,vi_b, xgcom, vgcom, xcom, vcom, mg);
+    SumComPosVel(pblock->pmy_mesh, x1i,x2i, v1i,v2i, xgcom, vgcom, xcom, vcom, mg);
     //SumAngularMomentumEnergyDiagnostic(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, lp, lg, ldo, Eorb);
     WritePMTrackfile(pblock->pmy_mesh,pin);
   }
@@ -847,29 +773,25 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"time           ");
       fprintf(pfile,"dt             ");
       fprintf(pfile,"m1               ");
-      fprintf(pfile,"m2a              ");
-      fprintf(pfile,"x_a              ");
-      fprintf(pfile,"y_a              ");
-      fprintf(pfile,"z_a              ");
-      fprintf(pfile,"vx_a             ");
-      fprintf(pfile,"vy_a             ");
-      fprintf(pfile,"vz_a             ");
-      fprintf(pfile,"m2b              ");
-      fprintf(pfile,"x_b              ");
-      fprintf(pfile,"y_b              ");
-      fprintf(pfile,"z_b              ");
-      fprintf(pfile,"vx_b             ");
-      fprintf(pfile,"vy_b             ");
-      fprintf(pfile,"vz_b             ");
+      fprintf(pfile,"x1              ");
+      fprintf(pfile,"y1              ");
+      fprintf(pfile,"z1              ");
+      fprintf(pfile,"vx1             ");
+      fprintf(pfile,"vy1             ");
+      fprintf(pfile,"vz1             ");
+      fprintf(pfile,"m2               ");
+      fprintf(pfile,"x2              ");
+      fprintf(pfile,"y2              ");
+      fprintf(pfile,"z2              ");
+      fprintf(pfile,"vx2             ");
+      fprintf(pfile,"vy2             ");
+      fprintf(pfile,"vz2             ");
       fprintf(pfile,"agas1x          ");
       fprintf(pfile,"agas1y          ");
       fprintf(pfile,"agas1z          ");
-      fprintf(pfile,"agas2x_a          ");
-      fprintf(pfile,"agas2y_a          ");
-      fprintf(pfile,"agas2z_a          ");
-      fprintf(pfile,"agas2x_b          ");
-      fprintf(pfile,"agas2y_b          ");
-      fprintf(pfile,"agas2z_b          ");
+      fprintf(pfile,"agas2x          ");
+      fprintf(pfile,"agas2y          ");
+      fprintf(pfile,"agas2z          ");
       fprintf(pfile,"xcom            ");
       fprintf(pfile,"ycom            ");
       fprintf(pfile,"zcom            ");
@@ -889,29 +811,25 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",pm->time);
     fprintf(pfile,"%20.6e",pm->dt);
     fprintf(pfile,"%20.6e",GM1/Ggrav);
-    fprintf(pfile,"%20.6e",GM2a/Ggrav);
-    fprintf(pfile,"%20.6e",xi_a[0]);
-    fprintf(pfile,"%20.6e",xi_a[1]);
-    fprintf(pfile,"%20.6e",xi_a[2]);
-    fprintf(pfile,"%20.6e",vi_a[0]);
-    fprintf(pfile,"%20.6e",vi_a[1]);
-    fprintf(pfile,"%20.6e",vi_a[2]);
-    fprintf(pfile,"%20.6e",GM2b/Ggrav);
-    fprintf(pfile,"%20.6e",xi_b[0]);
-    fprintf(pfile,"%20.6e",xi_b[1]);
-    fprintf(pfile,"%20.6e",xi_b[2]);
-    fprintf(pfile,"%20.6e",vi_b[0]);
-    fprintf(pfile,"%20.6e",vi_b[1]);
-    fprintf(pfile,"%20.6e",vi_b[2]);
+    fprintf(pfile,"%20.6e",x1i[0]);
+    fprintf(pfile,"%20.6e",x1i[1]);
+    fprintf(pfile,"%20.6e",x1i[2]);
+    fprintf(pfile,"%20.6e",v1i[0]);
+    fprintf(pfile,"%20.6e",v1i[1]);
+    fprintf(pfile,"%20.6e",v1i[2]);
+    fprintf(pfile,"%20.6e",GM2/Ggrav);
+    fprintf(pfile,"%20.6e",x2i[0]);
+    fprintf(pfile,"%20.6e",x2i[1]);
+    fprintf(pfile,"%20.6e",x2i[2]);
+    fprintf(pfile,"%20.6e",v2i[0]);
+    fprintf(pfile,"%20.6e",v2i[1]);
+    fprintf(pfile,"%20.6e",v2i[2]);
     fprintf(pfile,"%20.6e",agas1i[0]);
     fprintf(pfile,"%20.6e",agas1i[1]);
     fprintf(pfile,"%20.6e",agas1i[2]);
-    fprintf(pfile,"%20.6e",agas2i_a[0]);
-    fprintf(pfile,"%20.6e",agas2i_a[1]);
-    fprintf(pfile,"%20.6e",agas2i_a[2]);
-    fprintf(pfile,"%20.6e",agas2i_b[0]);
-    fprintf(pfile,"%20.6e",agas2i_b[1]);
-    fprintf(pfile,"%20.6e",agas2i_b[2]);
+    fprintf(pfile,"%20.6e",agas2i[0]);
+    fprintf(pfile,"%20.6e",agas2i[1]);
+    fprintf(pfile,"%20.6e",agas2i[2]);
     fprintf(pfile,"%20.6e",xcom[0]);
     fprintf(pfile,"%20.6e",xcom[1]);
     fprintf(pfile,"%20.6e",xcom[2]);
@@ -965,49 +883,24 @@ void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
   }
 }
 
-void corot_accel(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
-  Real Omega_x_r[3],Omega_x_Omega_x_r[3], Omega_x_v[3];
-  
-  // compute cross products 
-  cross(Omega,xi,Omega_x_r);
-  cross(Omega,Omega_x_r,Omega_x_Omega_x_r);
-  
-  cross(Omega,vi,Omega_x_v);
-  
-  // fill in the accelerations for the rotating frame
-  for (int i = 0; i < 3; i++){
-    ai[i] += -Omega_x_Omega_x_r[i];
-    ai[i] += -2.0*Omega_x_v[i];
-  }
-}
+void ParticleAccels(Real (&x1i)[3],Real (&x2i)[3],Real (&v1i)[3], Real (&v2i)[3],Real (&a1i)[3], Real (&a2i)[3]){
 
-void ParticleAccels(Real (&xi_a)[3],Real (&xi_b)[3],Real (&vi_a)[3], Real (&vi_b)[3],Real (&ai_a)[3], Real (&ai_b)[3]){
-
-  Real d1a = sqrt(xi_a[0]*xi_a[0] + xi_a[1]*xi_a[1] + xi_a[2]*xi_a[2]);
-  Real d1b = sqrt(xi_b[0]*xi_b[0] + xi_b[1]*xi_b[1] + xi_b[2]*xi_b[2]);
-  Real dab = sqrt( (xi_a[0]-xi_b[0])*(xi_a[0]-xi_b[0])
-		  +(xi_a[1]-xi_b[1])*(xi_a[1]-xi_b[1])
-		  +(xi_a[2]-xi_b[2])*(xi_a[2]-xi_b[2]) );
+  Real d12 = sqrt( (x1i[0]-x2i[0])*(x1i[0]-x2i[0])
+		  +(x1i[1]-x2i[1])*(x1i[1]-x2i[1])
+		  +(x1i[2]-x2i[2])*(x1i[2]-x2i[2]) );
   
   
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
-    Real a1 =  GM2a/pow(d1a,3) * xi_a[i] + GM2b/pow(d1b,3) * xi_b[i];
-    ai_a[i] = - GM1/pow(d1a,3)*xi_a[i] -GM2b/pow(dab,3)*(xi_a[i]-xi_b[i]) - a1;
-    ai_b[i] = - GM1/pow(d1b,3)*xi_b[i] -GM2b/pow(dab,3)*(xi_b[i]-xi_a[i]) - a1;
+    a1i[i] =  -GM2/pow(d12,3)*(x1i[i]-x2i[i]);
+    a2i[i] =  -GM1/pow(d12,3)*(x2i[i]-x1i[i]);
   } 
   
-  // IF WE'RE IN A ROTATING FRAME
-  if(corotating_frame == 1){
-    corot_accel(xi_a,vi_a,ai_a);
-    corot_accel(xi_b,vi_b,ai_b);
-  }
-
   // add the gas acceleration to ai
   if(include_gas_backreaction == 1){
     for (int i = 0; i < 3; i++){
-      ai_a[i] += -agas1i[i]+agas2i_a[i];
-      ai_b[i] += -agas1i[i]+agas2i_b[i];
+      a1i[i] += agas1i[i];
+      a2i[i] += agas2i[i];
     }
   }
 
@@ -1016,13 +909,12 @@ void ParticleAccels(Real (&xi_a)[3],Real (&xi_b)[3],Real (&vi_a)[3], Real (&vi_b
 
 
 
-void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1i)[3],Real (&ag2i_a)[3],Real (&ag2i_b)[3]){
+void SumGasOnParticleAccels(Mesh *pm, Real (&x1i)[3],Real (&x2i)[3],Real (&ag1i)[3],Real (&ag2i)[3]){
   
   // start by setting accelerations / positions to zero
   for (int ii = 0; ii < 3; ii++){
     ag1i[ii] = 0.0;
-    ag2i_a[ii] = 0.0;
-    ag2i_b[ii] = 0.0;
+    ag2i[ii] = 0.0;
   }
   
   MeshBlock *pmb=pm->pblock;
@@ -1056,28 +948,24 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1
 	  Real z = r*cos_th;
 
 	  // current position of the secondary
-	  Real d2a = sqrt(pow(x-xi_a[0], 2) +
-			  pow(y-xi_a[1], 2) +
-			  pow(z-xi_a[2], 2) );
-	  Real d2b = sqrt(pow(x-xi_b[0], 2) +
-			  pow(y-xi_b[1], 2) +
-			  pow(z-xi_b[2], 2) );
+	  Real d2a = sqrt(pow(x-x1i[0], 2) +
+			  pow(y-x1i[1], 2) +
+			  pow(z-x1i[2], 2) );
+	  Real d2b = sqrt(pow(x-x2i[0], 2) +
+			  pow(y-x2i[1], 2) +
+			  pow(z-x2i[2], 2) );
 
 	  Real d1c = pow(r,3);
 	  
 	   // gravitational accels in cartesian coordinates
 	  
-	  ag1i[0] += Ggrav*dm/d1c * x;
-	  ag1i[1] += Ggrav*dm/d1c * y;
-	  ag1i[2] += Ggrav*dm/d1c * z;
-	  
-	  ag2i_a[0] += Ggrav*dm * fspline(d2a,rsoft2) * (x-xi_a[0]);
-	  ag2i_a[1] += Ggrav*dm * fspline(d2a,rsoft2) * (y-xi_a[1]);
-	  ag2i_a[2] += Ggrav*dm * fspline(d2a,rsoft2) * (z-xi_a[2]);
+	  ag1i[0] += Ggrav*dm * fspline(d2a,rsoft2) * (x-x1i[0]);
+	  ag1i[1] += Ggrav*dm * fspline(d2a,rsoft2) * (y-x1i[1]);
+	  ag1i[2] += Ggrav*dm * fspline(d2a,rsoft2) * (z-x1i[2]);
 
-	  ag2i_b[0] += Ggrav*dm * fspline(d2b,rsoft2) * (x-xi_b[0]);
-	  ag2i_b[1] += Ggrav*dm * fspline(d2b,rsoft2) * (y-xi_b[1]);
-	  ag2i_b[2] += Ggrav*dm * fspline(d2b,rsoft2) * (z-xi_b[2]);
+	  ag2i[0] += Ggrav*dm * fspline(d2b,rsoft2) * (x-x2i[0]);
+	  ag2i[1] += Ggrav*dm * fspline(d2b,rsoft2) * (y-x2i[1]);
+	  ag2i[2] += Ggrav*dm * fspline(d2b,rsoft2) * (z-x2i[2]);
 	  
 	}
       }
@@ -1089,18 +977,15 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1
   // sum over all ranks
   if (Globals::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, ag1i, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, ag2i_a, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, ag2i_b, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, ag2i, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   } else {
     MPI_Reduce(ag1i,ag1i,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(ag2i_a,ag2i_a,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(ag2i_b,ag2i_b,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(ag2i,ag2i,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   }
 
   // and broadcast the result
   MPI_Bcast(ag1i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(ag2i_a,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(ag2i_b,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(ag2i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
 
     
@@ -1108,16 +993,16 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1
 
 
 void SumComPosVel(Mesh *pm,
-		  Real (&xi_a)[3], Real (&xi_b)[3],
-		  Real (&vi_a)[3], Real (&vi_b)[3],
+		  Real (&x1i)[3], Real (&x2i)[3],
+		  Real (&v1i)[3], Real (&v2i)[3],
 		  Real (&xgcom)[3],Real (&vgcom)[3],
 		  Real (&xcom)[3],Real (&vcom)[3],
 		  Real &mg){
 
    mg = 0.0;
    Real m1 = GM1/Ggrav;
-   Real m2a = GM2a/Ggrav;
-   Real m2b = GM2b/Ggrav;
+   Real m2 = GM2/Ggrav;
+   
   
   // start by setting accelerations / positions to zero
   for (int ii = 0; ii < 3; ii++){
@@ -1216,8 +1101,8 @@ void SumComPosVel(Mesh *pm,
   
   // FINISH CALC OF COM
   for (int ii = 0; ii < 3; ii++){
-    xcom[ii] = (xi_a[ii]*m2a + xi_b[ii]*m2b + xgcom[ii]*mg)/(m1+m2a+m2b+mg);
-    vcom[ii] = (vi_a[ii]*m2a + vi_b[ii]*m2b + vgcom[ii]*mg)/(m1+m2a+m2b+mg); 
+    xcom[ii] = (x1i[ii]*m1 + x2i[ii]*m2 + xgcom[ii]*mg)/(m1+m2+mg);
+    vcom[ii] = (v1i[ii]*m1 + v2i[ii]*m2 + vgcom[ii]*mg)/(m1+m2+mg); 
   }
 
 }
