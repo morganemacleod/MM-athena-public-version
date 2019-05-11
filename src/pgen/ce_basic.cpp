@@ -146,7 +146,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   separation_stop_min = pin->GetOrAddReal("problem","separation_stop_min",0.0);
   separation_stop_max = pin->GetOrAddReal("problem","separation_stop_max",1.e99);
   separation_start = pin->GetOrAddReal("problem","separation_start",1.e99);
-
     
 
   // local vars
@@ -155,6 +154,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
   Real fcorot = pin->GetOrAddReal("problem","fcorotation",0.0);
   Real Omega_orb, vcirc;
+
+  // gravity solver
+  Real four_pi_G = 12.566370614359172*Ggrav;
+  Real eps = pin->GetOrAddReal("problem","grav_eps", 0.0);
+  Real dens_mean =  pin->GetReal("problem","dens_mean");
+  SetFourPiG(four_pi_G);
+  SetGravityThreshold(eps);
+  SetMeanDensity(dens_mean);
 
   // allocate MESH data for the particle pos/vel, Omega frame
   AllocateRealUserMeshDataField(5);
