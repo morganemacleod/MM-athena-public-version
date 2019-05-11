@@ -84,10 +84,10 @@ Real da,pa; // ambient density, pressure
 Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc[NARRAY];  // initial profile
 
 Real GM1,GM2; // point masses
-Real rsoft2; // softening length of PM 2
+Real rsoft; // softening length of PM 2
 Real t_relax,t_mass_on; // time to damp fluid motion, time to turn on M2 over
 int  include_gas_backreaction, corotating_frame; // flags for output, gas backreaction on EOM, frame choice
-int n_particle_substeps; // substepping of particle integration
+int  n_particle_substeps; // substepping of particle integration
 
 Real x1i[3], v1i[3],x2i[3], v2i[3];  // cartesian positions/vels of the secondary object
 Real agas1i[3], agas2i[3]; //  gas->particle acceleration
@@ -96,21 +96,16 @@ Real xgcom[3], vgcom[3]; // cartesian pos/vel of the COM of the gas
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
 Real Eorb;
 
-Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelope
+Real Omega_envelope;  //rotation of initial envelope
 
 Real trackfile_next_time, trackfile_dt;
 int  trackfile_number;
-int  mode;  // mode=1 (polytrope), mode=2 (wind BC) 
 
 Real Ggrav;
 
 Real separation_start,separation_stop_min, separation_stop_max; // particle separation to abort the integration.
 
 int is_restart;
-
-// Static Refinement with AMR Params
-//Real x1_min_level1, x1_max_level1,x2_min_level1, x2_max_level1;
-Real x1_min_derefine;
 
 bool do_pre_integrate;
 
@@ -139,11 +134,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   GM2 = pin->GetReal("problem","GM2");
   
 
-  rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
+  rsoft = pin->GetOrAddReal("problem","rsoft",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
   t_mass_on = pin->GetOrAddReal("problem","t_mass_on",0.0);
-  corotating_frame = pin->GetInteger("problem","corotating_frame");
-
+  
   trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
 
   include_gas_backreaction = pin->GetInteger("problem","gas_backreaction");
@@ -153,24 +147,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   separation_stop_max = pin->GetOrAddReal("problem","separation_stop_max",1.e99);
   separation_start = pin->GetOrAddReal("problem","separation_start",1.e99);
 
-  // These are used for static refinement when using AMR
-  // x1_min_level1 = pin->GetOrAddReal("problem","x1_min_level1",0.0);
-  // x1_max_level1 = pin->GetOrAddReal("problem","x1_max_level1",0.0);
-  // x2_min_level1 = pin->GetOrAddReal("problem","x2_min_level1",0.0);
-  // x2_max_level1 = pin->GetOrAddReal("problem","x2_max_level1",0.0);
-  x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
-  
+    
 
   // local vars
-  Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
-  Real rmax = pin->GetOrAddReal("mesh","x1max",0.0);
-  Real thmin = pin->GetOrAddReal("mesh","x2min",0.0);
-  Real thmax = pin->GetOrAddReal("mesh","x2max",0.0);
-
+  
   Real sma = pin->GetReal("problem","sma");
-  Real sma2 = pin->GetReal("problem","sma2");
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
-  Real ecc2 = pin->GetOrAddReal("problem","ecc2",0.0);
   Real fcorot = pin->GetOrAddReal("problem","fcorotation",0.0);
   Real Omega_orb, vcirc;
 
@@ -180,19 +162,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   ruser_mesh_data[1].NewAthenaArray(3);
   ruser_mesh_data[2].NewAthenaArray(3);
   ruser_mesh_data[3].NewAthenaArray(3);
-  ruser_mesh_data[4].NewAthenaArray(3);
   
-  
-
   // Enroll a Source Function
   EnrollUserExplicitSourceFunction(TwoPointMass);
 
-  
   // always write at startup
   trackfile_next_time = time;
   trackfile_number = 0;
 
-    
   // read in profile arrays from file
   std::ifstream infile("hse_profile.dat"); 
   for(int i=0;i<NARRAY;i++){
@@ -202,59 +179,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   infile.close();
 
 
-  // set the inner point mass based on excised mass
-  Real menc_rin = Interpolate1DArrayEven(rad,menc, rmin );
-  GM1 = Ggrav*menc_rin;
-  
-  
-  
-  // need to do a 3D integral to get the gravitational acceleration
-  int ntp=300;
-  Real pi = 3.14159265359;
-  Real dr = (1.0 - rmin)/ntp;
-  Real dth = (thmax-thmin)/ntp;
-  Real dph = 2*pi/ntp;
-  
-  // current position of the secondary pair
-  Real x_2 = sma;
-  Real y_2 = 0;
-  Real z_2 = 0;
-  
-  // loop over the artifical domain and do the integral of the initial condition
-  Real accel = 0;
-  Real GMenv = 0;
-  for(int i=0; i<ntp; i++){
-    for(int j=0; j<ntp; j++){
-      for(int k=0; k<ntp; k++){
-	Real r  = rmin + dr/2 + i*dr;
-	Real th = thmin + dth/2. + j*dth;
-	Real ph = -pi + dph/2. + k*dph;
-	
-	// get local cartesian           
-	Real x = r*sin(th)*cos(ph);
-	Real y = r*sin(th)*sin(ph);
-	Real z = r*cos(th);
-	
-	Real d2 = sqrt(pow(x-x_2, 2) +
-		       pow(y-y_2, 2) +
-		       pow(z-z_2, 2) );
-	
-	// mass element
-	Real den = Interpolate1DArrayEven(rad,rho, r );
-	Real dm = r*r*sin(th)*dr*dth*dph * den;
-	
-	//mass
-	GMenv += Ggrav*dm;
-	
-	// gravitational accels in cartesian coordinates  
-	accel += -Ggrav*dm*fspline(d2,rsoft2) * (x-x_2);
-	
-      }
-    }
-  }
-    
-
+  Real GMenv = Ggrav*menc[NARRAY-1];
   Real GMtot = GM1+GM2+GMenv;
+
   //ONLY enter ICs loop if this isn't a restart
   if(time==0){
     // set the initial conditions for the pos/vel of the secondary
@@ -276,20 +203,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     v2i[1]= (GM1+GMenv)/GMtot * sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ) ; //v_apocenter
     v2i[2] = 0.0;
     
-    // now set the initial condition for Omega
-    Omega[0] = 0.0;
-    Omega[1] = 0.0;
-    Omega[2] = 0.0;
-    
-    // In the case of a corotating frame,
-    // subtract off the frame velocity and set Omega
-    if(corotating_frame == 1){
-      Omega[2] = Omega_orb;
-      v1i[1] -=  Omega[2]*sma;
-      v2i[1] -=  Omega[2]*sma; 
-    }
-    
-    
     // Angular velocity of the envelope (minus the frame?)
     Real f_pseudo = 1.0;
     if(ecc>0){
@@ -302,9 +215,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     for(int i=0; i<3; i++){
       ruser_mesh_data[0](i)  = x1i[i];
       ruser_mesh_data[1](i)  = v1i[i];
-      ruser_mesh_data[2](i)  = Omega[i];
-      ruser_mesh_data[3](i)  = x2i[i];
-      ruser_mesh_data[4](i)  = v2i[i];
+      ruser_mesh_data[2](i)  = x2i[i];
+      ruser_mesh_data[3](i)  = v2i[i];
     }
 
     // Decide whether to do pre-integration
@@ -321,22 +233,18 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========================================================\n";
     std::cout << "==========   SIMULATION INFO =============================\n";
     std::cout << "==========================================================\n";
-    std::cout << "mode =" << mode << "\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
     std::cout << "GM1 = "<< GM1 <<"\n";
     std::cout << "GM2 = "<< GM2 <<"\n";
     std::cout << "GMenv="<< GMenv << "\n";
-    std::cout << "GMenv/r^2, g_accel = " << GMenv/(sma*sma) << "  "<< accel << "\n";
     std::cout << "Omega_orb="<< Omega_orb << "\n";
     std::cout << "Omega_env="<< Omega_envelope << "\n";
     std::cout << "a = "<< sma <<"\n";
-    std::cout << "a2 = "<< sma2 <<"\n";
     std::cout << "e = "<< ecc <<"\n";
-    std::cout << "e2 = "<< ecc2 <<"\n";
     std::cout << "P = " << 6.2832*sqrt(sma*sma*sma/(GM1+GM2+GMenv)) << "\n";
-    std::cout << "rsoft2 ="<<rsoft2<<"\n";
+    std::cout << "rsoft ="<<rsoft<<"\n";
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "gas backreaction? = "<< include_gas_backreaction<<"\n";
     std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
@@ -402,9 +310,8 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
     for(int i=0; i<3; i++){
       x1i[i]    = pmb->pmy_mesh->ruser_mesh_data[0](i);
       v1i[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
-      Omega[i]   = pmb->pmy_mesh->ruser_mesh_data[2](i);
-      x2i[i]    = pmb->pmy_mesh->ruser_mesh_data[3](i);
-      v2i[i]    = pmb->pmy_mesh->ruser_mesh_data[4](i);
+      x2i[i]    = pmb->pmy_mesh->ruser_mesh_data[2](i);
+      v2i[i]    = pmb->pmy_mesh->ruser_mesh_data[3](i);
     }
     // print some info
     if (Globals::my_rank==0){
@@ -413,7 +320,6 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       std::cout << "====================================================\n";
       std::cout <<"x1i="<<x1i[0]<<" "<<x1i[1]<<" "<<x1i[2]<<"\n";
       std::cout <<"v1i="<<v1i[0]<<" "<<v1i[1]<<" "<<v1i[2]<<"\n";
-      std::cout <<"Omega="<<Omega[0]<<" "<<Omega[1]<<" "<<Omega[2]<<"\n";
       std::cout <<"x2i="<<x2i[0]<<" "<<x2i[1]<<" "<<x2i[2]<<"\n";
       std::cout <<"v2i="<<v2i[0]<<" "<<v2i[1]<<" "<<v2i[2]<<"\n";
       std::cout << "====================================================\n";
@@ -422,19 +328,6 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
   }
   
   Real GM2_factor = GetGM2factor(time);
-
-  // // decide whether or not to use the -a_gas_1 source term
-  // // we don't apply this if unless it's important because it can sometimes strongly destabilize the HSE envelope
-  // int agas1_source = 0;
-  // if(include_gas_backreaction==1){
-  //   Real a2m = sqrt(agas2i[0]*agas2i[0] + agas2i[1]*agas2i[1] + agas2i[2]*agas2i[2]);
-  //   Real a1m = sqrt(agas1i[0]*agas1i[0] + agas1i[1]*agas1i[1] + agas1i[2]*agas1i[2]);
-    
-  //   if (a2m>0 && a1m/a2m > agas1_source_rel_thresh){
-  //     //std::cout<< "applying agas1_source!\n"<< Globals::my_rank <<" "<<a1m<<"  "<<a2m<<"\n";
-  //     agas1_source=1;
-  //   }
-  // }
   
 
   // Gravitational acceleration from orbital motion
@@ -444,10 +337,6 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       Real y= pmb->pcoord->x2v(j);
       for (int i=pmb->is; i<=pmb->ie; i++) {
 	Real x = pmb->pcoord->x1v(i);
-
-	// current position of the secondary
-	Real d12c_a = pow(x1i[0]*x1i[0] + x1i[1]*x1i[1] + x1i[2]*x1i[2], 1.5);
-	Real d12c_b = pow(x2i[0]*x2i[0] + x2i[1]*x2i[1] + x2i[2]*x2i[2], 1.5);
 
 	// distances to zone
 	Real d1  = sqrt(pow(x-x1i[0], 2) +
@@ -461,9 +350,9 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	//  COMPUTE ACCELERATIONS 
 	//
 	// PM1,2 gravitational accels in cartesian coordinates
-	Real a_x = - GM1*fspline(d1,rsoft2)*(x-x1i[0]) - GM2*GM2_factor*fspline(d2,rsoft2)*(x-x2i[0]);   
-	Real a_y = - GM1*fspline(d1,rsoft2)*(y-x1i[1]) - GM2*GM2_factor*fspline(d2,rsoft2)*(y-x2i[1]);  
-	Real a_z = - GM1*fspline(d1,rsoft2)*(z-x1i[2]) - GM2*GM2_factor*fspline(d2,rsoft2)*(z-x2i[2]);
+	Real a_x = - GM1*fspline(d1,rsoft)*(x-x1i[0]) - GM2*GM2_factor*fspline(d2,rsoft)*(x-x2i[0]);   
+	Real a_y = - GM1*fspline(d1,rsoft)*(y-x1i[1]) - GM2*GM2_factor*fspline(d2,rsoft)*(y-x2i[1]);  
+	Real a_z = - GM1*fspline(d1,rsoft)*(z-x1i[2]) - GM2*GM2_factor*fspline(d2,rsoft)*(z-x2i[2]);
 
 	
 	//
@@ -529,20 +418,19 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
     for (int j=jl; j<=ju; j++) {
       for (int i=il; i<=iu; i++) {
 
-	Real r  = pcoord->x1v(i);
-	Real th = pcoord->x2v(j);
-	Real ph = pcoord->x3v(k);
-
+	Real x  = pcoord->x1v(i);
+	Real y = pcoord->x2v(j);
+	Real z = pcoord->x3v(k);
+	Real r_star = sqrt( SQR(x-x1i[0]) + y*y + z*z); 
+	Real Rcyl = sqrt( SQR(x-x1i[0]) + y*y);
 	
-	Real sin_th = sin(th);
-	Real Rcyl = r*sin_th;
 	
 	// get the density
-	den = Interpolate1DArrayEven(rad,rho, r );
+	den = Interpolate1DArrayEven(rad,rho, r_star );
 	den = std::max(den,da);
 	
 	// get the pressure 
-	pres = Interpolate1DArrayEven(rad,p, r );
+	pres = Interpolate1DArrayEven(rad,p, r_star );
 	pres = std::max(pres,pa);
 
 	// set the density
@@ -551,11 +439,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
    	// set the momenta components
 	phydro->u(IM1,k,j,i) = 0.0;
 	phydro->u(IM2,k,j,i) = 0.0;
-	if(r <= 1.0){
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl - Omega[2]*Rcyl);
-	}else{
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th/Rcyl - Omega[2]*Rcyl);
-	}
+	phydro->u(IM3,k,j,i) = 0.0;
 	  
 	//set the energy 
 	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1);
@@ -567,6 +451,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
   } // end loop over cells
   return;
 } // end ProblemGenerator
+
+
 
 //======================================================================================
 //! \fn void MeshBlock::UserWorkInLoop(void)
@@ -594,19 +480,19 @@ void MeshBlock::UserWorkInLoop(void)
 	for (int i=is; i<=ie; i++) {
 
 	  Real den = phydro->u(IDN,k,j,i);
-	  Real vr  = phydro->u(IM1,k,j,i) / den;
-	  Real vth = phydro->u(IM2,k,j,i) / den;
-	  Real vph = phydro->u(IM3,k,j,i) / den;
+	  Real vx = phydro->u(IM1,k,j,i) / den;
+	  Real vy = phydro->u(IM2,k,j,i) / den;
+	  Real vz = phydro->u(IM3,k,j,i) / den;
 	  
-	  Real a_damp_r =  - vr/tau;
-	  Real a_damp_th = - vth/tau;
-	  Real a_damp_ph = 0.0;
+	  Real a_damp_x = - vx/tau;
+	  Real a_damp_y = - vy/tau;
+	  Real a_damp_z = - vz/tau;
 	  
-	  phydro->u(IM1,k,j,i) += dt*den*a_damp_r;
-	  phydro->u(IM2,k,j,i) += dt*den*a_damp_th;
-	  phydro->u(IM3,k,j,i) += dt*den*a_damp_ph;
+	  phydro->u(IM1,k,j,i) += dt*den*a_damp_x;
+	  phydro->u(IM2,k,j,i) += dt*den*a_damp_y;
+	  phydro->u(IM3,k,j,i) += dt*den*a_damp_z;
 	  
-	  phydro->u(IEN,k,j,i) += dt*den*a_damp_r*vr + dt*den*a_damp_th*vth + dt*den*a_damp_ph*vph; 
+	  phydro->u(IEN,k,j,i) += dt*den*a_damp_x*vx + dt*den*a_damp_y*vy + dt*den*a_damp_z*vz; 
 	  
 	}
       }
@@ -677,13 +563,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
        if (Globals::my_rank==0){
 	 std::cout << "pre_integrate disabled!!\n";
        }
-
-    }
-
-
-
-
-    
+    }    
   }
     
   // EVOLVE THE ORBITAL POSITION OF THE SECONDARY
@@ -710,28 +590,25 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   for(int i=0; i<3; i++){
     ruser_mesh_data[0](i)  = x1i[i];
     ruser_mesh_data[1](i)  = v1i[i];
-    ruser_mesh_data[2](i)  = Omega[i];
-    ruser_mesh_data[3](i)  = x2i[i];
-    ruser_mesh_data[4](i)  = v2i[i];
+    ruser_mesh_data[2](i)  = x2i[i];
+    ruser_mesh_data[3](i)  = v2i[i];
   }
 
   // check the separation stopping conditions
-  Real da = sqrt(x1i[0]*x1i[0] + x1i[1]*x1i[1] + x1i[2]*x1i[2] );
-  Real db = sqrt(x2i[0]*x2i[0] + x2i[1]*x2i[1] + x2i[2]*x2i[2] );
-  Real d = std::min(da,db);
-  if (d<separation_stop_min){ 
+  Real d12 = sqrt( SQR(x1i[0]-x2i[0]) + SQR(x1i[1]-x2i[1]) + SQR(x1i[2]-x2i[2]) );
+  if (d12<separation_stop_min){ 
     if (Globals::my_rank == 0) {
       std::cout << "### Stopping because binary separation d<separation_stop_min" << std::endl
-		<< "d= " << d << " separation_stop_min="<<separation_stop_min<<std::endl;
+		<< "d12= " << d12 << " separation_stop_min="<<separation_stop_min<<std::endl;
     }
     SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit
     
   }
 
-  if (d>separation_stop_max){ 
+  if (d12>separation_stop_max){ 
     if (Globals::my_rank == 0) {
       std::cout << "### Stopping because binary separation d>separation_stop_max" << std::endl
-		<< "d= " << d << " separation_stop_max="<<separation_stop_max<<std::endl;
+		<< "d12= " << d12 << " separation_stop_max="<<separation_stop_max<<std::endl;
     }
     SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit
     
@@ -892,8 +769,8 @@ void ParticleAccels(Real (&x1i)[3],Real (&x2i)[3],Real (&v1i)[3], Real (&v2i)[3]
   
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
-    a1i[i] =  -GM2/pow(d12,3)*(x1i[i]-x2i[i]);
-    a2i[i] =  -GM1/pow(d12,3)*(x2i[i]-x1i[i]);
+    a1i[i] = -GM2/pow(d12,3)*(x1i[i]-x2i[i]);
+    a2i[i] = -GM1/pow(d12,3)*(x2i[i]-x1i[i]);
   } 
   
   // add the gas acceleration to ai
@@ -928,44 +805,32 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&x1i)[3],Real (&x2i)[3],Real (&ag1i)
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
     for (int k=pmb->ks; k<=pmb->ke; ++k) {
-      Real ph= pmb->pcoord->x3v(k);
-      Real sin_ph = sin(ph);
-      Real cos_ph = cos(ph);
-      for (int j=pmb->js; j<=pmb->je; ++j) {
-	Real th= pmb->pcoord->x2v(j);
-	Real sin_th = sin(th);
-	Real cos_th = cos(th);
+      Real z= pmb->pcoord->x3v(k);
+       for (int j=pmb->js; j<=pmb->je; ++j) {
+	Real y= pmb->pcoord->x2v(j);
 	pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
 	for (int i=pmb->is; i<=pmb->ie; ++i) {
 	  // cell mass dm
 	  Real dm = vol(i) * phyd->u(IDN,k,j,i);
-	  	  
-	  Real r = pmb->pcoord->x1v(i);
-
-	  // spherical polar coordinates, get local cartesian           
-	  Real x = r*sin_th*cos_ph;
-	  Real y = r*sin_th*sin_ph;
-	  Real z = r*cos_th;
+	  Real x = pmb->pcoord->x1v(i);
 
 	  // current position of the secondary
-	  Real d2a = sqrt(pow(x-x1i[0], 2) +
-			  pow(y-x1i[1], 2) +
-			  pow(z-x1i[2], 2) );
-	  Real d2b = sqrt(pow(x-x2i[0], 2) +
-			  pow(y-x2i[1], 2) +
-			  pow(z-x2i[2], 2) );
+	  Real d1 = sqrt(pow(x-x1i[0], 2) +
+			 pow(y-x1i[1], 2) +
+			 pow(z-x1i[2], 2) );
+	  Real d2 = sqrt(pow(x-x2i[0], 2) +
+			 pow(y-x2i[1], 2) +
+			 pow(z-x2i[2], 2) );
 
-	  Real d1c = pow(r,3);
+	  // gravitational accels in cartesian coordinates
 	  
-	   // gravitational accels in cartesian coordinates
-	  
-	  ag1i[0] += Ggrav*dm * fspline(d2a,rsoft2) * (x-x1i[0]);
-	  ag1i[1] += Ggrav*dm * fspline(d2a,rsoft2) * (y-x1i[1]);
-	  ag1i[2] += Ggrav*dm * fspline(d2a,rsoft2) * (z-x1i[2]);
+	  ag1i[0] += Ggrav*dm * fspline(d1,rsoft) * (x-x1i[0]);
+	  ag1i[1] += Ggrav*dm * fspline(d1,rsoft) * (y-x1i[1]);
+	  ag1i[2] += Ggrav*dm * fspline(d1,rsoft) * (z-x1i[2]);
 
-	  ag2i[0] += Ggrav*dm * fspline(d2b,rsoft2) * (x-x2i[0]);
-	  ag2i[1] += Ggrav*dm * fspline(d2b,rsoft2) * (y-x2i[1]);
-	  ag2i[2] += Ggrav*dm * fspline(d2b,rsoft2) * (z-x2i[2]);
+	  ag2i[0] += Ggrav*dm * fspline(d2,rsoft) * (x-x2i[0]);
+	  ag2i[1] += Ggrav*dm * fspline(d2,rsoft) * (y-x2i[1]);
+	  ag2i[2] += Ggrav*dm * fspline(d2,rsoft) * (z-x2i[2]);
 	  
 	}
       }
@@ -1028,35 +893,15 @@ void SumComPosVel(Mesh *pm,
 	  Real dm = vol(i) * phyd->u(IDN,k,j,i);
 	  	  
 	  //coordinates
-	  Real r = pmb->pcoord->x1v(i);
-	  Real th= pmb->pcoord->x2v(j);
-	  Real ph= pmb->pcoord->x3v(k);
-
-	    //get some angles
-	  Real sin_th = sin(th);
-	  Real cos_th = cos(th);
-	  Real sin_ph = sin(ph);
-	  Real cos_ph = cos(ph);
-	  
+	  Real x = pmb->pcoord->x1v(i);
+	  Real y = pmb->pcoord->x2v(j);
+	  Real z = pmb->pcoord->x3v(k);
 	 
-	  // spherical velocities
-	  Real vr =  phyd->u(IM1,k,j,i) / phyd->u(IDN,k,j,i);
-	  Real vth =  phyd->u(IM2,k,j,i) / phyd->u(IDN,k,j,i);
-	  Real vph =  phyd->u(IM3,k,j,i) / phyd->u(IDN,k,j,i);
-
-	  // Correct for rotation of the frame? [TBDW]
-
-	  
-	  // spherical polar coordinates, get local cartesian           
-	  Real x = r*sin_th*cos_ph;
-	  Real y = r*sin_th*sin_ph;
-	  Real z = r*cos_th;
-
-	  // get the cartesian velocities from the spherical (vector)
+	  //  velocities
 	  Real vgas[3];
-	  vgas[0] = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
-	  vgas[1] = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
-	  vgas[2] = cos_th*vr - sin_th*vth;
+	  vgas[0] =  phyd->u(IM1,k,j,i) / phyd->u(IDN,k,j,i);
+	  vgas[1] =  phyd->u(IM2,k,j,i) / phyd->u(IDN,k,j,i);
+	  vgas[2] =  phyd->u(IM3,k,j,i) / phyd->u(IDN,k,j,i);
 
 	  // do the summation
 	  mg += dm;

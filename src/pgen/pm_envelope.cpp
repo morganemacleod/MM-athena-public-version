@@ -126,7 +126,6 @@ Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelo
 
 Real trackfile_next_time, trackfile_dt;
 int  trackfile_number;
-int  mode;  // mode=1 (polytrope), mode=2 (wind BC) 
 
 Real Ggrav;
 
@@ -380,7 +379,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========================================================\n";
     std::cout << "==========   SIMULATION INFO =============================\n";
     std::cout << "==========================================================\n";
-    std::cout << "mode =" << mode << "\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
