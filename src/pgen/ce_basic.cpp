@@ -430,8 +430,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real z = pcoord->x3v(k);
 	Real r_star = sqrt( SQR(x-x1i[0]) + y*y + z*z); 
 	Real Rcyl = sqrt( SQR(x-x1i[0]) + y*y);
-	
-	
+		
 	// get the density
 	den = Interpolate1DArrayEven(rad,rho, r_star );
 	den = std::max(den,da);
@@ -447,7 +446,12 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IM1,k,j,i) = 0.0;
 	phydro->u(IM2,k,j,i) = 0.0;
 	phydro->u(IM3,k,j,i) = 0.0;
-	  
+
+	if(r_star < (x2i[0]-x1i[0]) ){
+	  phydro->u(IM2,k,j,i) = v1i[1]*den;
+	}
+	
+	
 	//set the energy 
 	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
