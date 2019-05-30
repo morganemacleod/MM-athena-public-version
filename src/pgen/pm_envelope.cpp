@@ -126,6 +126,7 @@ Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelo
 
 Real trackfile_next_time, trackfile_dt;
 int  trackfile_number;
+int  mode;  // mode=1 (polytrope), mode=2 (wind BC) 
 
 Real Ggrav;
 
@@ -141,7 +142,7 @@ bool do_pre_integrate;
 bool fixed_orbit;
 Real Omega_orb_fixed,sma_fixed;
 
-Real output_next_sep,dsep_output; // controling user forced output (set With dt=999.)
+Real output_next_sep,dsep_output; // controling user forced output (set with dt=999.)
 
 
 
@@ -379,6 +380,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========================================================\n";
     std::cout << "==========   SIMULATION INFO =============================\n";
     std::cout << "==========================================================\n";
+    std::cout << "mode =" << mode << "\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
@@ -418,14 +420,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
 } // end
-
-
-//void MeshBlock::InitUserMeshBlockData(ParameterInput *pin)
-//{
-//  AllocateUserOutputVariables(8);
-//  return;
-//}
-
 
 
 Real mxOmegaEnv(MeshBlock *pmb, int iout){
@@ -613,10 +607,6 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       vi[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
       Omega[i] = pmb->pmy_mesh->ruser_mesh_data[2](i);
     }
-
-    // set user_force_output to false by default
-    pmb->pmy_mesh->user_force_output=false;
-
     // print some info
     if (Globals::my_rank==0){
       std::cout << "*** Setting initial conditions for t>0 ***\n";
@@ -859,7 +849,7 @@ void MeshBlock::UserWorkInLoop(void)
   // if less than the relaxation time, apply 
   // a damping to the fluid velocities
   if(time < t_relax){
-    Real tau = 0.5;
+    Real tau = 1.0;
     if(time > 0.2*t_relax){
       tau *= pow(10, 2.0*(time-0.2*t_relax)/(0.8*t_relax) );
     }
@@ -1010,16 +1000,14 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   }
 
   // check whether to trigger forced output
-  if(time>t_relax){
-    if ((d<separation_stop_min) ||
-	(d>separation_stop_max) ||
-	(d<=output_next_sep) ){
-      user_force_output = true;
-      //output_next_sep -= dsep_output;
-      if (Globals::my_rank == 0) {
-	std::cout << "triggering user separation based output, d="<<d<<"\n";
-      } 
-    }
+  if ((d<separation_stop_min) ||
+      (d>separation_stop_max) ||
+      (d<=output_next_sep) ){
+    user_force_output = true;
+    //output_next_sep -= dsep_output;
+    if (Globals::my_rank == 0) {
+      std::cout << "triggering user separation based output, d="<<d<<"\n";
+    } 
   }
   output_next_sep = floor(d/dsep_output)*dsep_output; // rounds to the nearest lower sep
   
@@ -1550,7 +1538,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			      SQR(y-xi[1]) +
 			      SQR(z-xi[2]) );
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
-	  Real h = gamma_gas * pmb->phydro->w(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
+	  Real h = gamma_gas * pmb->phydro->u(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
 	  Real epot = -GMenc1/r - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
 	  Real bern = h+ek+epot;
@@ -1561,8 +1549,10 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	      mu += dm;
 	    }
 	  }
-	  //pmb->user_out_var(0,k,j,i) = bern; // set user_out_var(0) to bernoulli const
-	  	    
+	  
+			 
+	    
+	    
 	}
       }
     }//end loop over cells
