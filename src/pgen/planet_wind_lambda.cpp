@@ -13,7 +13,7 @@
 // You should have received a copy of GNU GPL in the file LICENSE included in the code
 // distribution.  If not see <http://www.gnu.org/licenses/>.
 //======================================================================================
-//! \file pm_envelope.cpp: tidal perturbation of polytropic stellar envelope by one point mass
+//! \file planet_wind_lambda.cpp: tidal perturbation of planet wind defined by hydrodynamic escape parameter lambda
 //======================================================================================
 
 // C++ headers
@@ -76,9 +76,6 @@ int  trackfile_number;
 
 int is_restart;
 
-bool fixed_orbit;
-Real Omega_orb_fixed,sma_fixed;
-
 Real rho_surface, lambda; // planet surface variables
 Real r_inner;
 
@@ -116,10 +113,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   r_inner = pin->GetReal("mesh","x1min");
 
 
-  // fixed orbit parameters
-  fixed_orbit = pin->GetOrAddBoolean("problem","fixed_orbit",false);
-  Omega_orb_fixed = pin->GetOrAddReal("problem","omega_orb_fixed",0.5);
-
   // local vars
   Real sma = pin->GetOrAddReal("problem","sma",1.5e12);
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
@@ -152,40 +145,30 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // PARTICLE ICs
   //ONLY enter ICs loop if this isn't a restart
   if(time==0){
-    if(fixed_orbit){
-      sma_fixed = pow((GM1+GM2)/(Omega_orb_fixed*Omega_orb_fixed),1./3.);
-      xi[0] = sma_fixed;
-      xi[1] = 0.0;
-      xi[2] = 0.0;  
-      vi[0] = 0.0;
-      vi[1]= Omega_orb_fixed*sma_fixed; 
-      vi[2] = 0.0;
-    }else{
-      //Real vcirc = sqrt((GM1+GM2)/sma + accel*sma);    
-      vcirc = sqrt((GM1+GM2)/sma);
-      Omega_orb = vcirc/sma;
-
-      // set the initial conditions for the pos/vel of the secondary
-      xi[0] = sma*(1.0 + ecc);  // apocenter
-      xi[1] = 0.0;
-      xi[2] = 0.0;
-            
-      vi[0] = 0.0;
-      vi[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
-      vi[2] = 0.0;
+    //Real vcirc = sqrt((GM1+GM2)/sma + accel*sma);    
+    vcirc = sqrt((GM1+GM2)/sma);
+    Omega_orb = vcirc/sma;
     
-      // now set the initial condition for Omega
-      Omega[0] = 0.0;
-      Omega[1] = 0.0;
-      Omega[2] = 0.0;
+    // set the initial conditions for the pos/vel of the secondary
+    xi[0] = sma*(1.0 + ecc);  // apocenter
+    xi[1] = 0.0;
+    xi[2] = 0.0;
     
-      // In the case of a corotating frame,
-      // subtract off the frame velocity and set Omega
-      if(corotating_frame == 1){
-	Omega[2] = Omega_orb;
-	vi[1] -=  Omega[2]*xi[0]; 
-      }
-    } // end of if_not_fixed_orbit
+    vi[0] = 0.0;
+    vi[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
+    vi[2] = 0.0;
+    
+    // now set the initial condition for Omega
+    Omega[0] = 0.0;
+    Omega[1] = 0.0;
+    Omega[2] = 0.0;
+    
+    // In the case of a corotating frame,
+    // subtract off the frame velocity and set Omega
+    if(corotating_frame == 1){
+      Omega[2] = Omega_orb;
+      vi[1] -=  Omega[2]*xi[0]; 
+    }
 
     // save the ruser_mesh_data variables
     for(int i=0; i<3; i++){
@@ -193,7 +176,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
       ruser_mesh_data[1](i)  = vi[i];
       ruser_mesh_data[2](i)  = Omega[i];
     }
-          
+    
   }else{
     is_restart=1;
   }
@@ -216,9 +199,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "rsoft2 ="<<rsoft2<<"\n";
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
-    std::cout << "fixed_orbit ="<<fixed_orbit<<"\n";
-    std::cout << "Omega_orb_fixed="<< Omega_orb_fixed << "\n";
-    std::cout << "a_fixed = "<< sma_fixed <<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
     std::cout << "==========================================================\n";
@@ -231,9 +211,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========================================================\n";
   }
   
-    
-
-
 } // end
 
 
@@ -418,22 +395,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real sin_th = sin(th);
 	Real Rcyl = r*sin_th;
 
-	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);	
-
-	if(r<0*r_inner){
-           pres = press_surface;
-           den = rho_surface;
-           vr = 0.0;
-        }else{
-           pres = pa;
-           den = da;
-           vr = std::sqrt(gamma_gas *pres/den);
-        }
-	
 	// get the density
-	//den = da;
-	//pres = pa; //std::max(pa,pres);
-
+	den = da;
+	pres = pa; 
+	vr = std::sqrt(gamma_gas *pres/den);
 
 	// set the density
 	phydro->u(IDN,k,j,i) = den;
@@ -482,42 +447,6 @@ Real mdotp(MeshBlock *pmb, int iout){
 
 
 
-
-//======================================================================================
-//! \fn void MeshBlock::UserWorkInLoop(void)
-//  \brief Function called once every time step for user-defined work.
-//======================================================================================
-void MeshBlock::UserWorkInLoop(void)
-{
-//  Real time = pmy_mesh->time;
-  //Real dt = pmy_mesh->dt;
- 
- // Real factor;
- // if(time<t_planet_on){
- //    factor = time/t_planet_on;
- // }else{
-  //   factor = 1.0;
- // }
-  
-
- // if(pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
-  //  for (int k=ks; k<=ke; k++) {
-    //  for (int j=js; j<=je; j++) {
- //       Real r = pcoord->x1v(is);
-//	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
-//	phydro->u(IDN,k,j,is) = factor*rho_surface;
-  //      phydro->u(IM1,k,j,is) = 0.0;
-    //    phydro->u(IM2,k,j,is) = 0.0;
-      //  phydro->u(IM3,k,j,is) = 0.0;
-      //  phydro->u(IEN,k,j,is) = factor*press_surface/(gamma_gas-1.0);       
-  //    }
-  //  }
- // }
-  return;
-} // end of UserWorkInLoop
-
-
-
 //========================================================================================
 // MM
 //! \fn void MeshBlock::MeshUserWorkInLoop(void)
@@ -530,30 +459,20 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   Real mg;
   
   // kick the initial conditions back a half step (v^n-1/2)
-  if((ncycle==0) && (fixed_orbit==false)){
+  if(ncycle==0){
     ParticleAccels(xi,vi,ai);
     kick(-0.5*dt,xi,vi,ai); 
-  } // ncycle=0, fixed_orbit = false
+  } // ncycle=0 
 
     
   // EVOLVE THE ORBITAL POSITION OF THE SECONDARY
   // do this on rank zero, then broadcast
   if (Globals::my_rank == 0){
-    if(fixed_orbit){
-      Real theta_orb = Omega_orb_fixed*time;
-      xi[0] = sma_fixed*std::cos(theta_orb);
-      xi[1] = sma_fixed*std::sin(theta_orb);
-      xi[2] = 0.0;
-      vi[0] = sma_fixed*Omega_orb_fixed*std::sin(theta_orb);
-      vi[1] = sma_fixed*Omega_orb_fixed*std::cos(theta_orb);
-      vi[2] = 0.0;
-    }else{
-      for (int ii=1; ii<=n_particle_substeps; ii++) {
-	// add the particle acceleration to ai
-	ParticleAccels(xi,vi,ai);
-	// advance the particle
-	particle_step(dt/n_particle_substeps,xi,vi,ai);
-      }
+    for (int ii=1; ii<=n_particle_substeps; ii++) {
+      // add the particle acceleration to ai
+      ParticleAccels(xi,vi,ai);
+      // advance the particle
+      particle_step(dt/n_particle_substeps,xi,vi,ai);
     }
   }
   
