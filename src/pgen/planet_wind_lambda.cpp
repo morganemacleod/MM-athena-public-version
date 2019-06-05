@@ -81,6 +81,8 @@ int is_restart;
 Real rho_surface, lambda; // planet surface variables
 Real r_inner;
 
+Real rho_surface_star, lambda_star, radius_star, t_on_star; //stellar surface variables
+
 Real dt_initial; // initial timeste
 
 
@@ -113,6 +115,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   rho_surface = pin->GetOrAddReal("problem","rho_surface",1.e-15);
   lambda = pin->GetOrAddReal("problem","lambda",5.0);
+
+  rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
+  lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
+  radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
+  t_on_star = pin->GetOrAddReal("problem","t_on_star",1.e3);
 
   dt_initial = pin->GetOrAddReal("problem","dt_initial",1.e99);
  
@@ -365,13 +372,31 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
 
+	// STAR BOUNDARY
+	if(d2 <= radius_star){
+	  Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
+	  Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
+	  Real vx = (x-x_2)/d2 * cs;
+	  Real vy = (x-x_2)/d2 * cs;
+	  Real vz = (x-x_2)/d2 * cs;
+	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
+	  Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
+	  Real vph = -sin_ph*vx + cos_ph*vy;
+	  
+	  cons(IDN,k,j,i) = rho_surface_star;
+	  cons(IM1,k,j,i) = rho_surface_star*vr;
+	  cons(IM2,k,j,i) = rho_surface_star*vth;
+	  cons(IM3,k,j,i) = rho_surface_star*vph;
+	  cons(IEN,k,j,i) = press_surface_star/(gamma_gas-1.0);  
+	}
+
+
       }
     }
   } // end loop over cells
   
 
   // PLANET BOUNDARY
-
   if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
     for (int k=pmb->ks; k<=pmb->ke; k++) {
       for (int j=pmb->js; j<=pmb->je; j++) {
@@ -385,6 +410,7 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       }
     }
   }
+
 
 
 }
@@ -432,6 +458,52 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+
+
+
+
+	
+	// STAR BOUNDARY
+	// current position of the secondary
+	Real x_2 = xi[0];
+	Real y_2 = xi[1];
+	Real z_2 = xi[2];
+	
+	// spherical polar coordinates, get local cartesian           
+	Real x = r*sin(th)*cos(ph);
+	Real y = r*sin(th)*sin(ph);
+	Real z = r*cos(th);
+  
+	Real d2  = sqrt(pow(x-x_2, 2) +
+			pow(y-y_2, 2) +
+			pow(z-z_2, 2) );
+
+	//if(d2 <= radius_star){
+	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
+	Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
+	Real vx = (x-x_2)/d2 * cs;
+	Real vy = (x-x_2)/d2 * cs;
+	Real vz = (x-x_2)/d2 * cs;
+	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
+	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
+	Real vph = -sin(ph)*vx + cos(ph)*vy;
+
+	if(d2 <= radius_star){
+	  den = rho_surface_star;
+	  pres = press_surface_star;
+	}else{
+	  den = rho_surface_star * pow((d2/radius_star),-2);
+	  pres = den * cs*cs / gamma_gas;
+	}
+	
+	phydro->u(IDN,k,j,i) = den;
+	phydro->u(IM1,k,j,i) = den*vr;
+	phydro->u(IM2,k,j,i) = den*vth;
+	phydro->u(IM3,k,j,i) = den*vph;
+	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1.0);
+	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
+				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+	  //}
 
       }
     }
