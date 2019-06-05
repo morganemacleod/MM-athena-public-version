@@ -81,7 +81,7 @@ int is_restart;
 Real rho_surface, lambda; // planet surface variables
 Real r_inner;
 
-Real rho_surface_star, lambda_star, radius_star, t_on_star; //stellar surface variables
+Real rho_surface_star, lambda_star, radius_star; //stellar surface variables
 
 Real dt_initial; // initial timeste
 
@@ -119,8 +119,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
   lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
   radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
-  t_on_star = pin->GetOrAddReal("problem","t_on_star",1.e3);
-
+  
   dt_initial = pin->GetOrAddReal("problem","dt_initial",1.e99);
  
   r_inner = pin->GetReal("mesh","x1min");
@@ -215,6 +214,15 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "rsoft2 ="<<rsoft2<<"\n";
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
+    std::cout << "==========================================================\n";
+    std::cout << "==========   BC INFO =============================\n";
+    std::cout << "==========================================================\n";
+    std::cout << "rho_surface (planet) = "<< rho_surface <<"\n";
+    std::cout << "lambda (planet) = "<< lambda <<"\n";
+    std::cout << "press_surface (planet) =" << rho_surface*GM1/(r_inner*gamma_gas*lambda) <<"\n";
+    std::cout << "rho_surface (star) = "<< rho_surface_star <<"\n";
+    std::cout << "lambda (star) = "<< lambda_star <<"\n";
+    std::cout << "press_surface (star) =" << rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star) <<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
     std::cout << "==========================================================\n";
@@ -384,9 +392,9 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	  Real vph = -sin_ph*vx + cos_ph*vy;
 	  
 	  cons(IDN,k,j,i) = rho_surface_star;
-	  cons(IM1,k,j,i) = rho_surface_star*vr;
-	  cons(IM2,k,j,i) = rho_surface_star*vth;
-	  cons(IM3,k,j,i) = rho_surface_star*vph;
+	  cons(IM1,k,j,i) = 0.0;  //rho_surface_star*vr;
+	  cons(IM2,k,j,i) = 0.0;  //rho_surface_star*vth;
+	  cons(IM3,k,j,i) = 0.0;  //rho_surface_star*vph;
 	  cons(IEN,k,j,i) = press_surface_star/(gamma_gas-1.0);  
 	}
 
@@ -493,7 +501,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_star;
 	}else{
 	  den = rho_surface_star * pow((d2/radius_star),-2);
-	  pres = den * cs*cs / gamma_gas;
+	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
 	}
 	
 	phydro->u(IDN,k,j,i) = den;
