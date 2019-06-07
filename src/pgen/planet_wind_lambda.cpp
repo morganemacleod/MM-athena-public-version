@@ -61,7 +61,7 @@ Real pspline(Real r, Real eps);
 
 // global (to this file) problem parameters
 Real gamma_gas; 
-Real da,pa; // ambient density, pressure
+//Real da,pa; // ambient density, pressure
 
 Real Ggrav;   // G 
 Real GM2, GM1; // point masses
@@ -96,8 +96,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // read in some global params (to this file)
  
   // first non-mode-dependent settings
-  pa   = pin->GetOrAddReal("problem","pamb",1.0);
-  da   = pin->GetOrAddReal("problem","damb",1.0);
+  //pa   = pin->GetOrAddReal("problem","pamb",1.0);
+  //da   = pin->GetOrAddReal("problem","damb",1.0);
   gamma_gas = pin->GetReal("hydro","gamma");
 
   Ggrav = pin->GetOrAddReal("problem","Ggrav",6.67408e-8);
@@ -369,18 +369,22 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	if(d2 <= radius_star){
 	  Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	  Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	  Real vx = (x-x_2)/d2 * cs;
-	  Real vy = (x-x_2)/d2 * cs;
-	  Real vz = (x-x_2)/d2 * cs;
+	  Real vx = vi[0];
+	  Real vy = vi[1];
+	  Real vz = vi[2];
+
+	  // convert back to spherical polar
 	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
 	  Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
 	  Real vph = -sin_ph*vx + cos_ph*vy;
 	  
 	  cons(IDN,k,j,i) = rho_surface_star;
-	  cons(IM1,k,j,i) = 0.0;  //rho_surface_star*vr;
-	  cons(IM2,k,j,i) = 0.0;  //rho_surface_star*vth;
-	  cons(IM3,k,j,i) = 0.0;  //rho_surface_star*vph;
-	  cons(IEN,k,j,i) = press_surface_star/(gamma_gas-1.0);  
+	  cons(IM1,k,j,i) = rho_surface_star*vr;
+	  cons(IM2,k,j,i) = rho_surface_star*vth;  
+	  cons(IM3,k,j,i) = rho_surface_star*vph;  
+	  cons(IEN,k,j,i) = press_surface_star/(gamma_gas-1.0);
+	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
+				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
 	}
 
 
@@ -431,32 +435,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real th = pcoord->x2v(j);
 	Real ph = pcoord->x3v(k);
 
-	Real sin_th = sin(th);
-	Real Rcyl = r*sin_th;
+	//Real sin_th = sin(th);
+	//Real Rcyl = r*sin_th;
 
-	// get the density
-	den = da;
-	pres = pa; 
-	vr = std::sqrt(gamma_gas *pres/den);
-
-	// set the density
-	phydro->u(IDN,k,j,i) = den;
-	
-   	// set the momenta components
-	phydro->u(IM1,k,j,i) = den*vr;
-	phydro->u(IM2,k,j,i) = 0.0;
-	phydro->u(IM3,k,j,i) = -den*Omega[2]*Rcyl;
-
-	//set the energy 
-	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1);
-	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
-				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
-
-
-
-
-	
-	// STAR BOUNDARY
+	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
 	// current position of the secondary
 	Real x_2 = xi[0];
 	Real y_2 = xi[1];
@@ -467,16 +449,18 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real y = r*sin(th)*sin(ph);
 	Real z = r*cos(th);
   
-	Real d2  = sqrt(pow(x-x_2, 2) +
-			pow(y-y_2, 2) +
-			pow(z-z_2, 2) );
+	Real d2  = sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) +
+			pow(z-xi[2], 2) );
 
-	//if(d2 <= radius_star){
+
 	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	Real vx = (x-x_2)/d2 * cs;
-	Real vy = (x-x_2)/d2 * cs;
-	Real vz = (x-x_2)/d2 * cs;
+	Real vx = (x-xi[0])/d2 * cs + vi[0];
+	Real vy = (x-xi[1])/d2 * cs + vi[1];
+	Real vz = (x-xi[2])/d2 * cs + vi[2];
+
+	// convert back to spherical polar
 	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	Real vph = -sin(ph)*vx + cos(ph)*vy;
@@ -496,7 +480,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1.0);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
-	  //}
 
       }
     }
