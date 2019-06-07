@@ -58,7 +58,6 @@ Real mdotp(MeshBlock *pmb, int iout);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
-Real MyTimeStep(MeshBlock *pmb);
 
 // global (to this file) problem parameters
 Real gamma_gas; 
@@ -82,8 +81,6 @@ Real rho_surface, lambda; // planet surface variables
 Real r_inner;
 
 Real rho_surface_star, lambda_star, radius_star; //stellar surface variables
-
-Real dt_initial; // initial timeste
 
 
 //======================================================================================
@@ -119,9 +116,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
   lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
   radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
-  
-  dt_initial = pin->GetOrAddReal("problem","dt_initial",1.e99);
- 
+   
   r_inner = pin->GetReal("mesh","x1min");
 
 
@@ -150,9 +145,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   AllocateUserHistoryOutput(1);
   EnrollUserHistoryOutput(0, mdotp, "mdotp");
 
-  // Enroll user timestep
-  EnrollUserTimeStepFunction(MyTimeStep);
-  
   // always write at startup
   trackfile_next_time = time;
   trackfile_number = 0;
@@ -239,15 +231,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   
 } // end
 
-
-Real MyTimeStep(MeshBlock *pmb)
-{
-  Real dt_limit = 1.e99;
-  if(pmb->pmy_mesh->time == 0){
-    dt_limit = dt_initial;
-  }
-  return dt_limit;
-}
 
 
 
