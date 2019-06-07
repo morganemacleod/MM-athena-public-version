@@ -215,7 +215,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
     std::cout << "==========================================================\n";
-    std::cout << "==========   BC INFO =============================\n";
+    std::cout << "==========   BC INFO         =============================\n";
     std::cout << "==========================================================\n";
     std::cout << "rho_surface (planet) = "<< rho_surface <<"\n";
     std::cout << "lambda (planet) = "<< lambda <<"\n";
