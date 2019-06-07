@@ -293,24 +293,27 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	Real vx = (x-xi[0])/d2 * cs + vi[0];
-	Real vy = (x-xi[1])/d2 * cs + vi[1];
-	Real vz = (x-xi[2])/d2 * cs + vi[2];
+	Real vx,vy,vz;
 
 	if(d2 <= radius_star){
 	  den = rho_surface_star;
 	  pres = press_surface_star;
-	  vx +=  - sin(phi2)*(omega_star-Omega[2])*R2; // rotation
-	  vy +=    cos(phi2)*(omega_star-Omega[2])*R2; 
+	  vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
+	  vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
+	  vz = vi[2];
 	}else{
 	  den = rho_surface_star * pow((d2/radius_star),-2);
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
+	  vx = (x-xi[0])/d2 * cs + vi[0];  // wind directed outward at v=cs, always radial in whatever frame we pick, regardless of stellar rotation
+	  vy = (y-xi[1])/d2 * cs + vi[1];
+	  vz = (z-xi[2])/d2 * cs + vi[2];
 	}
 
 	// convert back to spherical polar
 	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	Real vph = -sin(ph)*vx + cos(ph)*vy;
+
 	
 	phydro->u(IDN,k,j,i) = den;
 	phydro->u(IM1,k,j,i) = den*vr;
@@ -511,7 +514,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	cons(IDN,k,j,pmb->is) = rho_surface;
         cons(IM1,k,j,pmb->is) = 0.0;
         cons(IM2,k,j,pmb->is) = 0.0;
-        cons(IM3,k,j,pmb->is) = (omega_planet-Omega[2])*Rcyl;
+        cons(IM3,k,j,pmb->is) = rho_surface*(omega_planet-Omega[2])*Rcyl;
         cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
 	cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
 				+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
