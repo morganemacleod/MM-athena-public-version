@@ -40,7 +40,7 @@
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
-void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
+void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
@@ -139,7 +139,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
   // Enroll a Source Function
-  EnrollUserExplicitSourceFunction(TwoPointMass);
+  EnrollUserExplicitSourceFunction(StarPlanetWinds);
 
   // Enroll extra history output
   AllocateUserHistoryOutput(1);
@@ -236,7 +236,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
 // Source Function for two point masses
-void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
+void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
 		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
 { 
 
@@ -365,7 +365,10 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
 
-	// STAR BOUNDARY
+
+
+	
+	// STAR BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
 	if(d2 <= radius_star){
 	  Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	  Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
@@ -393,7 +396,7 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
   } // end loop over cells
   
 
-  // PLANET BOUNDARY
+  // PLANET BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
   if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
     for (int k=pmb->ks; k<=pmb->ke; k++) {
       for (int j=pmb->js; j<=pmb->je; j++) {
@@ -406,7 +409,7 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
         cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);       
       }
     }
-  }
+  } // end loop over innermost blocks
 
 
 
