@@ -128,12 +128,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Real f_corot_star   = pin->GetOrAddReal("problem","f_corotation_star",1.0);
   Real Omega_orb, vcirc;
  
-  // allocate MESH data for the particle pos/vel, Omega frame
-  AllocateRealUserMeshDataField(3);
+  // allocate MESH data for the particle pos/vel, Omega frame, omega_planet & omega_star
+  AllocateRealUserMeshDataField(4);
   ruser_mesh_data[0].NewAthenaArray(3);
   ruser_mesh_data[1].NewAthenaArray(3);
   ruser_mesh_data[2].NewAthenaArray(3);
- 
+  ruser_mesh_data[3].NewAthenaArray(2);
 
   // enroll the BCs
   if(mesh_bcs[OUTER_X1] == GetBoundaryFlag("user")) {
@@ -189,6 +189,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
       ruser_mesh_data[1](i)  = vi[i];
       ruser_mesh_data[2](i)  = Omega[i];
     }
+
+    ruser_mesh_data[3](0) = omega_planet;
+    ruser_mesh_data[3](1) = omega_star;
+    
     
   }else{
     is_restart=1;
@@ -253,12 +257,16 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
       vi[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
       Omega[i] = pmb->pmy_mesh->ruser_mesh_data[2](i);
     }
+    omega_planet = ruser_mesh_data[3](0);
+    omega_star   = ruser_mesh_data[3](1);
+
     // print some info
     if (Globals::my_rank==0){
       std::cout << "*** Setting initial conditions for t>0 ***\n";
       std::cout <<"xi="<<xi[0]<<" "<<xi[1]<<" "<<xi[2]<<"\n";
       std::cout <<"vi="<<vi[0]<<" "<<vi[1]<<" "<<vi[2]<<"\n";
       std::cout <<"Omega="<<Omega[0]<<" "<<Omega[1]<<" "<<Omega[2]<<"\n";
+      std::cout << "omega_planet ="<<omega_planet<<"  omega_star ="<<omega_star<<"\n";
     }
     is_restart=0;
   }
