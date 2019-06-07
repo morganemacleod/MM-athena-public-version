@@ -245,6 +245,92 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
 
+
+
+
+//======================================================================================
+//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
+//  \brief Spherical Coords HSE Envelope problem generator
+//======================================================================================
+
+void MeshBlock::ProblemGenerator(ParameterInput *pin)
+{
+
+  // local vars
+  Real den, pres, vr;
+
+  // SETUP THE INITIAL CONDITIONS ON MESH
+  for (int k=ks; k<=ke; k++) {
+    for (int j=js; j<=je; j++) {
+      for (int i=is; i<=ie; i++) {
+
+	Real r  = pcoord->x1v(i);
+	Real th = pcoord->x2v(j);
+	Real ph = pcoord->x3v(k);
+
+	//Real sin_th = sin(th);
+	//Real Rcyl = r*sin_th;
+
+	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
+	// current position of the secondary
+	Real x_2 = xi[0];
+	Real y_2 = xi[1];
+	Real z_2 = xi[2];
+	
+	// spherical polar coordinates, get local cartesian           
+	Real x = r*sin(th)*cos(ph);
+	Real y = r*sin(th)*sin(ph);
+	Real z = r*cos(th);
+
+	// location relative to point mass 2 (star)
+	Real d2  = sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) +
+			pow(z-xi[2], 2) );
+	Real R2 =  sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) );
+	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+
+
+	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
+	Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
+	Real vx = (x-xi[0])/d2 * cs + vi[0];
+	Real vy = (x-xi[1])/d2 * cs + vi[1];
+	Real vz = (x-xi[2])/d2 * cs + vi[2];
+
+	if(d2 <= radius_star){
+	  den = rho_surface_star;
+	  pres = press_surface_star;
+	  vx +=  - sin(phi2)*(omega_star-Omega[2])*R2; // rotation
+	  vy +=    cos(phi2)*(omega_star-Omega[2])*R2; 
+	}else{
+	  den = rho_surface_star * pow((d2/radius_star),-2);
+	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
+	}
+
+	// convert back to spherical polar
+	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
+	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
+	Real vph = -sin(ph)*vx + cos(ph)*vy;
+	
+	phydro->u(IDN,k,j,i) = den;
+	phydro->u(IM1,k,j,i) = den*vr;
+	phydro->u(IM2,k,j,i) = den*vth;
+	phydro->u(IM3,k,j,i) = den*vph;
+	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1.0);
+	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
+				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+
+      }
+    }
+  } // end loop over cells
+  return;
+} // end ProblemGenerator
+
+
+
+
+
+
 // Source Function for two point masses
 void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
 		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
@@ -257,8 +343,8 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
       vi[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
       Omega[i] = pmb->pmy_mesh->ruser_mesh_data[2](i);
     }
-    omega_planet = ruser_mesh_data[3](0);
-    omega_star   = ruser_mesh_data[3](1);
+    omega_planet = pmb->pmy_mesh->ruser_mesh_data[3](0);
+    omega_star   = pmb->pmy_mesh->ruser_mesh_data[3](1);
 
     // print some info
     if (Globals::my_rank==0){
@@ -436,88 +522,6 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 
 
 }
-
-
-
-
-//======================================================================================
-//! \fn void MeshBlock::ProblemGenerator(ParameterInput *pin)
-//  \brief Spherical Coords HSE Envelope problem generator
-//======================================================================================
-
-void MeshBlock::ProblemGenerator(ParameterInput *pin)
-{
-
-  // local vars
-  Real den, pres, vr;
-
-  // SETUP THE INITIAL CONDITIONS ON MESH
-  for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-      for (int i=is; i<=ie; i++) {
-
-	Real r  = pcoord->x1v(i);
-	Real th = pcoord->x2v(j);
-	Real ph = pcoord->x3v(k);
-
-	//Real sin_th = sin(th);
-	//Real Rcyl = r*sin_th;
-
-	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
-	// current position of the secondary
-	Real x_2 = xi[0];
-	Real y_2 = xi[1];
-	Real z_2 = xi[2];
-	
-	// spherical polar coordinates, get local cartesian           
-	Real x = r*sin(th)*cos(ph);
-	Real y = r*sin(th)*sin(ph);
-	Real z = r*cos(th);
-
-	// location relative to point mass 2 (star)
-	Real d2  = sqrt(pow(x-xi[0], 2) +
-			pow(y-xi[1], 2) +
-			pow(z-xi[2], 2) );
-	Real R2 =  sqrt(pow(x-xi[0], 2) +
-			pow(y-xi[1], 2) );
-	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
-
-
-	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
-	Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	Real vx = (x-xi[0])/d2 * cs + vi[0];
-	Real vy = (x-xi[1])/d2 * cs + vi[1];
-	Real vz = (x-xi[2])/d2 * cs + vi[2];
-
-	if(d2 <= radius_star){
-	  den = rho_surface_star;
-	  pres = press_surface_star;
-	  vx +=  - sin(phi2)*(omega_star-Omega[2])*R2; // rotation
-	  vy +=    cos(phi2)*(omega_star-Omega[2])*R2; 
-	}else{
-	  den = rho_surface_star * pow((d2/radius_star),-2);
-	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
-	}
-
-	// convert back to spherical polar
-	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	Real vph = -sin(ph)*vx + cos(ph)*vy;
-	
-	phydro->u(IDN,k,j,i) = den;
-	phydro->u(IM1,k,j,i) = den*vr;
-	phydro->u(IM2,k,j,i) = den*vth;
-	phydro->u(IM3,k,j,i) = den*vph;
-	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1.0);
-	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
-				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
-
-      }
-    }
-  } // end loop over cells
-  return;
-} // end ProblemGenerator
-
 
 
 
