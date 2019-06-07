@@ -81,7 +81,7 @@ Real rho_surface, lambda; // planet surface variables
 Real r_inner;
 
 Real rho_surface_star, lambda_star, radius_star; //stellar surface variables
-
+Real omega_planet, omega_star; // rotation of planet and star boundaries
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -120,9 +120,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   r_inner = pin->GetReal("mesh","x1min");
 
 
+
   // local vars
   Real sma = pin->GetOrAddReal("problem","sma",1.5e12);
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
+  Real f_corot_planet = pin->GetOrAddReal("problem","f_corotation_planet",1.0);
+  Real f_corot_star   = pin->GetOrAddReal("problem","f_corotation_star",1.0);
   Real Omega_orb, vcirc;
  
   // allocate MESH data for the particle pos/vel, Omega frame
@@ -155,6 +158,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     //Real vcirc = sqrt((GM1+GM2)/sma + accel*sma);    
     vcirc = sqrt((GM1+GM2)/sma);
     Omega_orb = vcirc/sma;
+    // rotation of star and planet
+    omega_star = f_corot_star * Omega_orb;
+    omega_planet = f_corot_planet * Omega_orb;
     
     // set the initial conditions for the pos/vel of the secondary
     xi[0] = sma*(1.0 + ecc);  // apocenter
@@ -370,10 +376,14 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	
 	// STAR BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
 	if(d2 <= radius_star){
+	  Real R2 =  sqrt(pow(x-xi[0], 2) +
+			  pow(y-xi[1], 2) );
+	  Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+	  
 	  Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	  Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	  Real vx = vi[0];
-	  Real vy = vi[1];
+	  Real vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
+	  Real vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
 	  Real vz = vi[2];
 
 	  // convert back to spherical polar
@@ -401,12 +411,16 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
     for (int k=pmb->ks; k<=pmb->ke; k++) {
       for (int j=pmb->js; j<=pmb->je; j++) {
         Real r = pmb->pcoord->x1v(pmb->is);
+	Real th = pmb->pcoord->x2v(j); 
+	Real Rcyl = r*sin(th);
 	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
 	cons(IDN,k,j,pmb->is) = rho_surface;
         cons(IM1,k,j,pmb->is) = 0.0;
         cons(IM2,k,j,pmb->is) = 0.0;
-        cons(IM3,k,j,pmb->is) = 0.0;
-        cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);       
+        cons(IM3,k,j,pmb->is) = (omega_planet-Omega[2])*Rcyl;
+        cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
+	cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
+				+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
       }
     }
   } // end loop over innermost blocks
@@ -451,10 +465,14 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real x = r*sin(th)*cos(ph);
 	Real y = r*sin(th)*sin(ph);
 	Real z = r*cos(th);
-  
+
+	// location relative to point mass 2 (star)
 	Real d2  = sqrt(pow(x-xi[0], 2) +
 			pow(y-xi[1], 2) +
 			pow(z-xi[2], 2) );
+	Real R2 =  sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) );
+	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
 
 
 	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
@@ -463,18 +481,20 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vy = (x-xi[1])/d2 * cs + vi[1];
 	Real vz = (x-xi[2])/d2 * cs + vi[2];
 
-	// convert back to spherical polar
-	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	Real vph = -sin(ph)*vx + cos(ph)*vy;
-
 	if(d2 <= radius_star){
 	  den = rho_surface_star;
 	  pres = press_surface_star;
+	  vx +=  - sin(phi2)*(omega_star-Omega[2])*R2; // rotation
+	  vy +=    cos(phi2)*(omega_star-Omega[2])*R2; 
 	}else{
 	  den = rho_surface_star * pow((d2/radius_star),-2);
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
 	}
+
+	// convert back to spherical polar
+	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
+	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
+	Real vph = -sin(ph)*vx + cos(ph)*vy;
 	
 	phydro->u(IDN,k,j,i) = den;
 	phydro->u(IM1,k,j,i) = den*vr;
