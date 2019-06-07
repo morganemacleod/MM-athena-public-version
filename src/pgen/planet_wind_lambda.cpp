@@ -220,9 +220,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "rho_surface (planet) = "<< rho_surface <<"\n";
     std::cout << "lambda (planet) = "<< lambda <<"\n";
     std::cout << "press_surface (planet) =" << rho_surface*GM1/(r_inner*gamma_gas*lambda) <<"\n";
+    std::cout << "temperature_surface (planet) =" << (rho_surface*GM1/(r_inner*gamma_gas*lambda)) / ( rho_surface * 8.3145e7) <<"\n";
     std::cout << "rho_surface (star) = "<< rho_surface_star <<"\n";
     std::cout << "lambda (star) = "<< lambda_star <<"\n";
     std::cout << "press_surface (star) =" << rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star) <<"\n";
+    std::cout << "temperature_surface (star) =" << (rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star)) / ( rho_surface_star * 8.3145e7) <<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
     std::cout << "==========================================================\n";
