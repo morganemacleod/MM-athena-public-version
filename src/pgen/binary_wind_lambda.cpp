@@ -331,31 +331,17 @@ void BinaryWind(MeshBlock *pmb, const Real time, const Real dt, const AthenaArra
 
 
 	
-	// STAR BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-	// if(d2 <= radius_star){
-	//   Real R2 =  sqrt(pow(x-xi[0], 2) +
-	// 		  pow(y-xi[1], 2) );
-	//   Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+	// STAR BOUNDARIES (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
+	Real phi = PhiEff(x,y,z);
+	if(phi < phi_critical and ( d1 <= sma/2. or  d2 <= sma/2.)  ){
+	  Real press_surface = -rho_surface*phi_critical/(gamma_gas*lambda);
+	  cons(IDN,k,j,i) = rho_surface;
+	  cons(IM1,k,j,i) = 0.0;
+	  cons(IM2,k,j,i) = 0.0;
+	  cons(IM3,k,j,i) = 0.0;
+	  cons(IEN,k,j,i) = press_surface/(gamma_gas-1.0);
 	  
-	//   Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
-	//   Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	//   Real vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
-	//   Real vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
-	//   Real vz = vi[2];
-
-	//   // convert back to spherical polar
-	//   Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
-	//   Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
-	//   Real vph = -sin_ph*vx + cos_ph*vy;
-	  
-	//   cons(IDN,k,j,i) = rho_surface_star;
-	//   cons(IM1,k,j,i) = rho_surface_star*vr;
-	//   cons(IM2,k,j,i) = rho_surface_star*vth;  
-	//   cons(IM3,k,j,i) = rho_surface_star*vph;  
-	//   cons(IEN,k,j,i) = press_surface_star/(gamma_gas-1.0);
-	//   cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
-	// 			       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
-	// }
+	}
 
 
       }
