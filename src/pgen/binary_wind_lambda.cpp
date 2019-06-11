@@ -145,6 +145,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========   BC INFO         =============================\n";
     std::cout << "==========================================================\n";
     std::cout << "rho_surface = "<< rho_surface <<"\n";
+    std::cout << "press_surface = "<< -rho_surface*phi_critical/(gamma_gas*lambda) <<"\n";
     std::cout << "lambda = "<< lambda <<"\n";
     std::cout << "phi_critical ="<<phi_critical<<"\n";
     std::cout << "phi_critical/phi_L1 ="<<phi_critical/phi_L1<<"\n";
@@ -191,7 +192,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
     for (int j=js; j<=je; j++) {
       for (int i=is; i<=ie; i++) {
 
-	Real x  = pcoord->x1v(i);
+	Real x = pcoord->x1v(i);
 	Real y = pcoord->x2v(j);
 	Real z = pcoord->x3v(k);
 
@@ -206,24 +207,27 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 			pow(z-x2i[2], 2) );
 
 
-	Real press_surface = rho_surface*phi_critical/(gamma_gas*lambda);
+	Real press_surface = -rho_surface*phi_critical/(gamma_gas*lambda);
 	Real cs = std::sqrt(gamma_gas*press_surface/rho_surface);
 	Real vx,vy,vz;
 
-	if(phi < phi_critical and d1 <= sma/2.0 ){
+	Real Rroche = 0.379*sma; // for q=1
+	
+
+	if(phi < phi_critical and d1 <= sma/2.){
 	  den = rho_surface;
 	  pres = press_surface;
 	  vx = 0.0;
 	  vy = 0.0;
 	  vz = 0.0;
-	}else if(phi< phi_critical and d2 <= sma/2.0 ){
+	}else if(phi< phi_critical and d2 <= sma/2.){
 	  den = rho_surface;
 	  pres = press_surface;
 	  vx = 0.0;
 	  vy = 0.0;
 	  vz = 0.0;
 	}else{
-	  den = rho_surface * pow((d1/1.),-2) + rho_surface * pow((d2/1.),-2);
+	  den = rho_surface * ( pow((d1/Rroche),-2) +  pow((d2/Rroche),-2) );
 	  pres = press_surface * pow(den / rho_surface, gamma_gas);
 	  vx = ((x-x1i[0])/d1 + (x-x2i[0])/d2)*cs/2.0;  // wind directed outward from each at v=cs
 	  vy = ((y-x1i[1])/d1 + (y-x2i[1])/d2)*cs/2.0;
@@ -419,11 +423,13 @@ Real PhiEff(Real x, Real y, Real z){
 Real PhiL1(){
   int n = 1000;
   Real x,x_L1;
-  Real phi,phi_max;
+  Real phi;
+  Real phi_max=-1.e99;
 
   for(int i=0;i<n;i++){
     x = x1i[0] + (x2i[0]-x1i[0])*i/n;
     phi = PhiEff(x,0,0);
+    //std::cout << x<< phi << "\n";
     phi_max = std::max(phi,phi_max);
     if(phi==phi_max){
       x_L1 = x;
