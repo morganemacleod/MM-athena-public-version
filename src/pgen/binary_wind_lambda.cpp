@@ -417,7 +417,7 @@ Real PhiEff(Real x, Real y, Real z){
 }
 
 Real PhiL1(){
-  int n;
+  int n = 1000;
   Real x,x_L1;
   Real phi,phi_max;
 
