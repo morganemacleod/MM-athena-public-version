@@ -42,19 +42,11 @@ void BinaryWind(MeshBlock *pmb, const Real time, const Real dt, const AthenaArra
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
-void ParticleAccels(Real (&x1i)[3],Real (&x2i)[3],Real (&v1i)[3],Real (&v2i)[3],Real (&a1i)[3],Real (&a2i)[3]);
-void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-
 void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]);
-
-void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
-
-Real mdotp(MeshBlock *pmb, int iout);
 
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
+
 Real PhiEff(Real x, Real y, Real z);
 Real PhiL1();
 
@@ -65,18 +57,13 @@ Real gamma_gas;
 Real Ggrav;   // G 
 Real GM2, GM1; // point masses
 Real rsoft; // softening length of PM 2
-int corotating_frame; // flags for output, gas backreaction on EOM, frame choice
-int n_particle_substeps; // substepping of particle integration
 
 Real x1i[3], v1i[3], x2i[3], v2i[3]; // cartesian positions/vels of the secondary object, gas->particle acceleration
 Real Omega[3];  // vector rotation of the frame, initial wind
+Real sma;
 
-Real trackfile_next_time, trackfile_dt;
-int  trackfile_number;
-
-int is_restart;
-
-Real rho_surface, lambda, radius; // planet surface variables
+Real rho_surface, lambda; // planet surface variables
+Real phi_critical;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -98,77 +85,48 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   rsoft = pin->GetOrAddReal("problem","rsoft",0.1);
   
-  trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
-  n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
-
   rho_surface = pin->GetOrAddReal("problem","rho_surface",1.0);
   lambda = pin->GetOrAddReal("problem","lambda",5.0);
-  radius = pin->GetOrAddReal("problem","radius",0.2);
 
-  // local vars
-  Real sma = pin->GetOrAddReal("problem","sma",1.0);
+  sma = pin->GetOrAddReal("problem","sma",1.0);
   Real Omega_orb, vcirc;
  
-  // allocate MESH data for the particle pos/vel, Omega frame, omega_planet & omega_star
-  AllocateRealUserMeshDataField(5);
-  ruser_mesh_data[0].NewAthenaArray(3);
-  ruser_mesh_data[1].NewAthenaArray(3);
-  ruser_mesh_data[2].NewAthenaArray(3);
-  ruser_mesh_data[3].NewAthenaArray(3);
-  ruser_mesh_data[4].NewAthenaArray(3);
-
 
   // Enroll a Source Function
   EnrollUserExplicitSourceFunction(BinaryWind);
 
 
-  // always write at startup
-  trackfile_next_time = time;
-  trackfile_number = 0;
-    
-  // PARTICLE ICs
-  //ONLY enter ICs loop if this isn't a restart
-  if(time==0){
-    
-    //Real vcirc = sqrt((GM1+GM2)/sma + accel*sma);    
-    vcirc = sqrt((GM1+GM2)/sma);
-    Omega_orb = vcirc/sma;
-    
-    // set the initial conditions for the pos/vel of the binary
-    x1i[0] = -sma*(GM2/(GM1+GM2));
-    x1i[1] = 0.0;
-    x1i[2] = 0.0;
-    
-    v1i[0] = 0.0;
-    v1i[1]=  0.0; //- vcirc*(GM2/(GM1+GM2)); 
-    v1i[2] = 0.0;
-    
-    x2i[0] = sma*(GM2/(GM1+GM2));
-    x2i[1] = 0.0;
-    x2i[2] = 0.0;
-    
-    v2i[0] = 0.0;
-    v2i[1]=  0.0; //vcirc*(GM2/(GM1+GM2)); 
-    v2i[2] = 0.0;
-    
-    // now set the initial condition for Omega
-    Omega[0] = 0.0;
-    Omega[1] = 0.0;
-    Omega[2] = Omega_orb;
-    
-    // save the ruser_mesh_data variables
-    for(int i=0; i<3; i++){
-      ruser_mesh_data[0](i)  = x1i[i];
-      ruser_mesh_data[1](i)  = v1i[i];
-      ruser_mesh_data[2](i)  = Omega[i];
-      ruser_mesh_data[3](i)  = x2i[i];
-      ruser_mesh_data[4](i)  = v2i[i];
-    }
-  }else{
-    is_restart=1;
-  }
-  
+  // PARTICLES
+  //Real vcirc = sqrt((GM1+GM2)/sma + accel*sma);    
+  vcirc = sqrt((GM1+GM2)/sma);
+  Omega_orb = vcirc/sma;
 
+  // set the initial conditions for the pos/vel of the binary
+  x1i[0] = -sma*(GM2/(GM1+GM2));
+  x1i[1] = 0.0;
+  x1i[2] = 0.0;
+  
+  v1i[0] = 0.0;
+  v1i[1]=  0.0; //- vcirc*(GM2/(GM1+GM2)); 
+  v1i[2] = 0.0;
+  
+  x2i[0] = sma*(GM2/(GM1+GM2));
+  x2i[1] = 0.0;
+  x2i[2] = 0.0;
+  
+  v2i[0] = 0.0;
+  v2i[1]=  0.0; //vcirc*(GM2/(GM1+GM2)); 
+  v2i[2] = 0.0;
+  
+  // now set the initial condition for Omega
+  Omega[0] = 0.0;
+  Omega[1] = 0.0;
+  Omega[2] = Omega_orb;
+
+  
+  Real phi_L1 = PhiL1();
+  phi_critical = phi_L1;
+  
   // Print out some info
   if (Globals::my_rank==0){
     std::cout << "==========================================================\n";
@@ -183,12 +141,13 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "a = "<< sma <<"\n";
     std::cout << "P = "<< 6.2832*sqrt(sma*sma*sma/(GM1+GM2)) << "\n";
     std::cout << "rsoft ="<<rsoft<<"\n";
-    std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   BC INFO         =============================\n";
     std::cout << "==========================================================\n";
     std::cout << "rho_surface = "<< rho_surface <<"\n";
     std::cout << "lambda = "<< lambda <<"\n";
+    std::cout << "phi_critical ="<<phi_critical<<"\n";
+    std::cout << "phi_critical/phi_L1 ="<<phi_critical/phi_L1<<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particles       =============================\n";
     std::cout << "==========================================================\n";
@@ -236,6 +195,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real y = pcoord->x2v(j);
 	Real z = pcoord->x3v(k);
 
+	Real phi = PhiEff(x,y,z);
+
 	// location relative to point masses
 	Real d1  = sqrt(pow(x-x1i[0], 2) +
 			pow(y-x1i[1], 2) +
@@ -245,24 +206,24 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 			pow(z-x2i[2], 2) );
 
 
-	Real press_surface = rho_surface*GM2/(radius*gamma_gas*lambda);
+	Real press_surface = rho_surface*phi_critical/(gamma_gas*lambda);
 	Real cs = std::sqrt(gamma_gas*press_surface/rho_surface);
 	Real vx,vy,vz;
 
-	if(d1 <= radius){
+	if(phi < phi_critical and d1 <= sma/2.0 ){
 	  den = rho_surface;
 	  pres = press_surface;
 	  vx = 0.0;
 	  vy = 0.0;
 	  vz = 0.0;
-	}else if(d2 <= radius){
+	}else if(phi< phi_critical and d2 <= sma/2.0 ){
 	  den = rho_surface;
 	  pres = press_surface;
 	  vx = 0.0;
 	  vy = 0.0;
 	  vz = 0.0;
 	}else{
-	  den = rho_surface * pow((d1/radius),-2) + rho_surface * pow((d2/radius),-2);
+	  den = rho_surface * pow((d1/1.),-2) + rho_surface * pow((d2/1.),-2);
 	  pres = press_surface * pow(den / rho_surface, gamma_gas);
 	  vx = ((x-x1i[0])/d1 + (x-x2i[0])/d2)*cs/2.0;  // wind directed outward from each at v=cs
 	  vy = ((y-x1i[1])/d1 + (y-x2i[1])/d2)*cs/2.0;
@@ -292,29 +253,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 // Source Function for two point masses
 void BinaryWind(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
 		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
-{ 
-
-  if(is_restart>0){
-    // else this is a restart, read the current particle state
-    for(int i=0; i<3; i++){
-      x1i[i]    = pmb->pmy_mesh->ruser_mesh_data[0](i);
-      v1i[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
-      Omega[i] = pmb->pmy_mesh->ruser_mesh_data[2](i);
-      x2i[i]    = pmb->pmy_mesh->ruser_mesh_data[3](i);
-      v2i[i]    = pmb->pmy_mesh->ruser_mesh_data[4](i);
-    }
-
-    // print some info
-    if (Globals::my_rank==0){
-      std::cout << "*** Setting initial conditions for t>0 ***\n";
-      std::cout <<"x1i="<<x1i[0]<<" "<<x1i[1]<<" "<<x1i[2]<<"\n";
-      std::cout <<"v1i="<<v1i[0]<<" "<<v1i[1]<<" "<<v1i[2]<<"\n";
-      std::cout <<"x2i="<<x2i[0]<<" "<<x2i[1]<<" "<<x2i[2]<<"\n";
-      std::cout <<"v2i="<<v2i[0]<<" "<<v2i[1]<<" "<<v2i[2]<<"\n";
-    }
-    is_restart=0;
-  }
-  
+{   
   // Gravitational acceleration from orbital motion
   for (int k=pmb->ks; k<=pmb->ke; k++) {
     Real z= pmb->pcoord->x3v(k);
