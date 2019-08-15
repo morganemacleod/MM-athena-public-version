@@ -83,6 +83,8 @@ Real r_inner;
 Real rho_surface_star, lambda_star, radius_star; //stellar surface variables
 Real omega_planet, omega_star; // rotation of planet and star boundaries
 
+bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -118,6 +120,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
    
   r_inner = pin->GetReal("mesh","x1min");
+
+  initialize_planet_wind = pin->GetBoolean("problem","initialize_planet_wind"); 
 
 
 
@@ -268,8 +272,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real th = pcoord->x2v(j);
 	Real ph = pcoord->x3v(k);
 
-	//Real sin_th = sin(th);
-	//Real Rcyl = r*sin_th;
+	Real sin_th = sin(th);
+	Real Rcyl = r*sin_th;
 
 	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
 	// current position of the secondary
@@ -289,11 +293,17 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real R2 =  sqrt(pow(x-xi[0], 2) +
 			pow(y-xi[1], 2) );
 	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+	Real th2 = std::acos((z-xi[2])/d2);
 
 
+	// surface parameters (star and planet)
 	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
-	Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
+	Real cs_star = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
+	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
+	Real cs_planet = std::sqrt(gamma_gas *press_surface/rho_surface);
+	
 	Real vx,vy,vz;
+	Real vr,vth,vph;
 
 	if(d2 <= radius_star){
 	  den = rho_surface_star;
@@ -301,18 +311,33 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
 	  vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
 	  vz = vi[2];
-	}else{
-	  den = rho_surface_star * pow((d2/radius_star),-2);
-	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
-	  vx = (x-xi[0])/d2 * cs + vi[0];  // wind directed outward at v=cs, always radial in whatever frame we pick, regardless of stellar rotation
-	  vy = (y-xi[1])/d2 * cs + vi[1];
-	  vz = (z-xi[2])/d2 * cs + vi[2];
+	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
+	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
+	  vph = -sin(ph)*vx + cos(ph)*vy;
 	}
 
-	// convert back to spherical polar
-	Real vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	Real vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	Real vph = -sin(ph)*vx + cos(ph)*vy;
+	if(initialize_planet_wind == true){
+	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
+	  // constant angular momentum of surface
+	  den = rho_surface * pow((r/r_inner),-2);
+	  pres = press_surface * pow(den / rho_surface, gamma_gas);
+	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
+	  vth = 0.0;
+	  vph = omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+
+	}else{
+
+	  den = rho_surface_star * pow((d2/radius_star),-2);
+	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
+	  // wind directed outward at v=cs
+	  // constant angular momentum of surface
+	  vx = (x-xi[0])/d2 * cs_star + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
+	  vy = (y-xi[1])/d2 * cs_star + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
+	  vz = (z-xi[2])/d2 * cs_star + vi[2];
+	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
+	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
+	  vph = -sin(ph)*vx + cos(ph)*vy;
+	}
 
 	
 	phydro->u(IDN,k,j,i) = den;

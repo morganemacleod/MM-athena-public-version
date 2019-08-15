@@ -4,13 +4,13 @@ problem_id = PLANET_WIND_LAMBDA_2d_W107     # problem ID: basename of output fil
 <output1>
 file_type  = hdf5        # Binary data dump
 variable   = prim       # variables to be output
-dt         = 1.e3      # time increment between outputs
+dt         = 1.e4      # time increment between outputs
 xdmf = 0
 #x2_slice = 1.5707963267948966
 
 <output2>
 file_type  = hst      # history
-dt         = 1.e1   # time increment between outputs
+dt         = 1.e4   # time increment between outputs
 
 <output3>
 file_type  = rst      # restart
@@ -20,7 +20,7 @@ dt         = 1.0e11     # time increment between outputs
 <time>
 cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1      # cycle limit
-tlim       = 1.0e5       # time limit
+tlim       = 1.0e6       # time limit
 
 <mesh>
 nx1        = 192        # Number of zones in X1-direction
@@ -57,14 +57,23 @@ refinement     = static
 #x3max = 3.141592653589793
 
 
-#<refinement2>
-#level = 1
-#x1min = 3.e10
-#x1max = 1.8e11
-#x2min = 1.3744467859455345 
-#x2max = 1.7671458676442586
-#x3min = -1.0471975511965976
-#x3max = 1.0471975511965976
+<refinement2>
+level = 1
+x1min = 7.0e11
+x1max = 9.5e11
+x2min = 1.3744467859455345 
+x2max = 1.7671458676442586
+x3min = -0.5
+x3max = 0.5
+
+<refinement3>
+level = 2
+x1min = 7.5e11
+x1max = 8.9e11
+x2min = 1.3744467859455345 
+x2max = 1.7671458676442586
+x3min = -0.25
+x3max = 0.25
 
 
 
@@ -89,13 +98,14 @@ ecc             = 0.0
 
 ### planet
 M1              = 2.259e29
-rho_surface = 1.e-18
+rho_surface = 1.e-11
 lambda = 5.0
 f_corotation_planet = 1.0
+initialize_planet_wind = true
 
 ### star
 M2              = 1.3724e33
-rho_surface_star = 1.0e-18
+rho_surface_star = 2.0e-18
 lambda_star = 5.0
 radius_star = 4.592e10
 rsoft2      = 2.1e10
@@ -108,6 +118,6 @@ n_particle_substeps = 1 # how many particle integration substeps per timestep?
 
 
 ### trackfile output 
-trackfile_dt = 1.e2  # dt for printing particle properties
+trackfile_dt = 1.e3  # dt for printing particle properties
 
 
