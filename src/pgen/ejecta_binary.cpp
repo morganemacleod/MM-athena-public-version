@@ -40,7 +40,7 @@
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
-void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
+void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
@@ -52,8 +52,6 @@ void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
 void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]);
 
 void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
-
-Real mdotp(MeshBlock *pmb, int iout);
 
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
@@ -77,13 +75,10 @@ int  trackfile_number;
 
 int is_restart;
 
-Real rho_surface, lambda; // planet surface variables
+Real m_ejecta, vinf_min_ejecta, vinf_max_ejecta, dlogmdlogv_ejecta; // ejecta variables
+Real r_max_ejecta;
 Real r_inner;
 
-Real rho_surface_star, lambda_star, radius_star; //stellar surface variables
-Real omega_planet, omega_star; // rotation of planet and star boundaries
-
-bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
 Real da,pa;
 
 //======================================================================================
@@ -113,24 +108,19 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
   n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
 
-  rho_surface = pin->GetOrAddReal("problem","rho_surface",1.e-15);
-  lambda = pin->GetOrAddReal("problem","lambda",5.0);
-
-  rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
-  lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
-  radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
+  m_ejecta = pin->GetOrAddReal("problem","m_ejecta",1.0);
+  vinf_min_ejecta =pin->GetOrAddReal("problem","vinf_min_ejecta",0.0);
+  vinf_max_ejecta =pin->GetOrAddReal("problem","vinf_max_ejecta",1.0);
+  dlogmdlogv_ejecta =pin->GetOrAddReal("problem","dlogmdlogv_ejecta",0.0);
    
   r_inner = pin->GetReal("mesh","x1min");
 
-  initialize_planet_wind = pin->GetBoolean("problem","initialize_planet_wind"); 
 
 
 
   // local vars
   Real sma = pin->GetOrAddReal("problem","sma",1.5e12);
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
-  Real f_corot_planet = pin->GetOrAddReal("problem","f_corotation_planet",1.0);
-  Real f_corot_star   = pin->GetOrAddReal("problem","f_corotation_star",1.0);
   Real Omega_orb, vcirc;
  
   // allocate MESH data for the particle pos/vel, Omega frame, omega_planet & omega_star
@@ -147,11 +137,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
   // Enroll a Source Function
-  EnrollUserExplicitSourceFunction(StarPlanetWinds);
+  EnrollUserExplicitSourceFunction(TwoPointMass);
 
   // Enroll extra history output
-  AllocateUserHistoryOutput(1);
-  EnrollUserHistoryOutput(0, mdotp, "mdotp");
+  //AllocateUserHistoryOutput(1);
+  //EnrollUserHistoryOutput(0, mdotp, "mdotp");
 
   // always write at startup
   trackfile_next_time = time;
@@ -288,54 +278,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real y = r*sin(th)*sin(ph);
 	Real z = r*cos(th);
 
-	// location relative to point mass 2 (star)
-	Real d2  = sqrt(pow(x-xi[0], 2) +
-			pow(y-xi[1], 2) +
-			pow(z-xi[2], 2) );
-	Real R2 =  sqrt(pow(x-xi[0], 2) +
-			pow(y-xi[1], 2) );
-	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
-	Real th2 = std::acos((z-xi[2])/d2);
-
-
-	// surface parameters (star and planet)
-	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
-	Real cs_star = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
-	Real cs_planet = std::sqrt(gamma_gas *press_surface/rho_surface);
-	
-	Real vx,vy,vz;
 	Real vr,vth,vph;
 
-	// Near Star
-	if(d2 <= radius_star){
-	  den = rho_surface_star;
-	  pres = press_surface_star;
-	  vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
-	  vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
-	  vz = vi[2];
-	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	  vph = -sin(ph)*vx + cos(ph)*vy;
-	}else if(d2<= sma/2){
-	  den = rho_surface_star * pow((d2/radius_star),-8);
-	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
-	  // wind directed outward at v=cs
-	  // constant angular momentum of surface
-	  vx = (x-xi[0])/d2 * cs_star + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	  vy = (y-xi[1])/d2 * cs_star + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	  vz = (z-xi[2])/d2 * cs_star + vi[2];
-	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	  vph = -sin(ph)*vx + cos(ph)*vy;
-	}else{
-	  den = da;
-	  pres = pa;
-	  vr = 0.0;
-	  vth = 0.0;
-	  vph = 0.0; //- Omega[2]*Rcyl;
-	}
-	
 	// Near planet
 	if(initialize_planet_wind == true & r<=sma/2){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
@@ -367,7 +311,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 
 // Source Function for two point masses
-void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
+void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
 		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
 { 
 
@@ -500,87 +444,13 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
 
-
-
-	
-	// STAR BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-	if(d2 <= radius_star){
-	  Real R2 =  sqrt(pow(x-xi[0], 2) +
-			  pow(y-xi[1], 2) );
-	  Real phi2 = std::atan2(y-xi[1],x-xi[0]);
-	  
-	  Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
-	  Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
-	  Real vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
-	  Real vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
-	  Real vz = vi[2];
-
-	  // convert back to spherical polar
-	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
-	  Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
-	  Real vph = -sin_ph*vx + cos_ph*vy;
-	  
-	  cons(IDN,k,j,i) = rho_surface_star;
-	  cons(IM1,k,j,i) = rho_surface_star*vr;
-	  cons(IM2,k,j,i) = rho_surface_star*vth;  
-	  cons(IM3,k,j,i) = rho_surface_star*vph;  
-	  cons(IEN,k,j,i) = press_surface_star/(gamma_gas-1.0);
-	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
-				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
-	}
-
-
       }
     }
   } // end loop over cells
   
-
-  // PLANET BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-  if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
-    for (int k=pmb->ks; k<=pmb->ke; k++) {
-      for (int j=pmb->js; j<=pmb->je; j++) {
-        Real r = pmb->pcoord->x1v(pmb->is);
-	Real th = pmb->pcoord->x2v(j); 
-	Real Rcyl = r*sin(th);
-	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
-	cons(IDN,k,j,pmb->is) = rho_surface;
-        cons(IM1,k,j,pmb->is) = 0.0;
-        cons(IM2,k,j,pmb->is) = 0.0;
-        cons(IM3,k,j,pmb->is) = rho_surface*(omega_planet-Omega[2])*Rcyl;
-        cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
-	cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
-				+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
-      }
-    }
-  } // end loop over innermost blocks
-
-
-
 }
 
 
-
-
-
-Real mdotp(MeshBlock *pmb, int iout){
-  Real mdot = 0.0;
-  
-  if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
-     int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-     AthenaArray<Real> area;
-     int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-     area.NewAthenaArray(ncells1);
-  
-     for(int k=ks; k<=ke; k++) {
-       for(int j=js; j<=je; j++) {
-          pmb->pcoord->VolCenterFace1Area(k,j,pmb->is,pmb->ie,area);
-          mdot += area(pmb->is+10)*pmb->phydro->u(IM1,k,j,pmb->is+10); // dmdot = dA*rho*v
-        }
-      }
-    } // end if
-  
-  return mdot;
-}
 
 
 
