@@ -84,6 +84,7 @@ Real rho_surface_star, lambda_star, radius_star; //stellar surface variables
 Real omega_planet, omega_star; // rotation of planet and star boundaries
 
 bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
+Real da,pa;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -98,8 +99,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // read in some global params (to this file)
  
   // first non-mode-dependent settings
-  //pa   = pin->GetOrAddReal("problem","pamb",1.0);
-  //da   = pin->GetOrAddReal("problem","damb",1.0);
+  pa   = pin->GetOrAddReal("problem","pamb",1.0);
+  da   = pin->GetOrAddReal("problem","damb",1.0);
   gamma_gas = pin->GetReal("hydro","gamma");
 
   Ggrav = pin->GetOrAddReal("problem","Ggrav",6.67408e-8);
@@ -262,7 +263,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
   // local vars
   Real den, pres, vr;
-
+  Real sma = pin->GetReal("problem","sma");
+  
   // SETUP THE INITIAL CONDITIONS ON MESH
   for (int k=ks; k<=ke; k++) {
     for (int j=js; j<=je; j++) {
@@ -305,6 +307,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vx,vy,vz;
 	Real vr,vth,vph;
 
+	// Near Star
 	if(d2 <= radius_star){
 	  den = rho_surface_star;
 	  pres = press_surface_star;
@@ -314,20 +317,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	  vph = -sin(ph)*vx + cos(ph)*vy;
-	}
-
-	if(initialize_planet_wind == true){
-	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
-	  // constant angular momentum of surface
-	  den = rho_surface * pow((r/r_inner),-2);
-	  pres = press_surface * pow(den / rho_surface, gamma_gas);
-	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
-	  vth = 0.0;
-	  vph = omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
-
-	}else{
-
-	  den = rho_surface_star * pow((d2/radius_star),-2);
+	}else if(d2<= sma/2){
+	  den = rho_surface_star * pow((d2/radius_star),-8);
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
 	  // wind directed outward at v=cs
 	  // constant angular momentum of surface
@@ -337,14 +328,30 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	  vph = -sin(ph)*vx + cos(ph)*vy;
+	}else{
+	  den = da;
+	  pres = pa;
+	  vr = 0.0;
+	  vth = 0.0;
+	  vph = 0.0; //- Omega[2]*Rcyl;
 	}
-
 	
-	phydro->u(IDN,k,j,i) = den;
+	// Near planet
+	if(initialize_planet_wind == true & r<=sma/2){
+	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
+	  // constant angular momentum of surface
+	  den = rho_surface * pow((r/r_inner),-8);
+	  pres = press_surface * pow(den / rho_surface, gamma_gas);
+	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
+	  vth = 0.0;
+	  vph = omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	}
+	
+	phydro->u(IDN,k,j,i) = std::max(den,da);
 	phydro->u(IM1,k,j,i) = den*vr;
 	phydro->u(IM2,k,j,i) = den*vth;
 	phydro->u(IM3,k,j,i) = den*vph;
-	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1.0);
+	phydro->u(IEN,k,j,i) = std::max(pres,pa)/(gamma_gas-1.0);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
 
