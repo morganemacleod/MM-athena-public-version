@@ -56,6 +56,9 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
+Real vr_ejecta(Real r);
+Real dmdv_ejecta(Real v);
+
 
 // global (to this file) problem parameters
 Real gamma_gas; 
@@ -108,11 +111,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
   n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
 
-  m_ejecta = pin->GetOrAddReal("problem","m_ejecta",1.0);
-  vinf_min_ejecta =pin->GetOrAddReal("problem","vinf_min_ejecta",0.0);
-  vinf_max_ejecta =pin->GetOrAddReal("problem","vinf_max_ejecta",1.0);
-  dlogmdlogv_ejecta =pin->GetOrAddReal("problem","dlogmdlogv_ejecta",0.0);
+  m_ejecta = pin->GetReal("problem","m_ejecta");
+  vinf_min_ejecta =pin->GetReal("problem","vinf_min_ejecta");
+  vinf_max_ejecta =pin->GetReal("problem","vinf_max_ejecta");
+  dlogmdlogv_ejecta =pin->GetReal("problem","dlogmdlogv_ejecta");
    
+  r_max_ejecta = pin->GetReal("problem","r_max_ejecta");
   r_inner = pin->GetReal("mesh","x1min");
 
 
@@ -124,11 +128,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Real Omega_orb, vcirc;
  
   // allocate MESH data for the particle pos/vel, Omega frame, omega_planet & omega_star
-  AllocateRealUserMeshDataField(4);
+  AllocateRealUserMeshDataField(3);
   ruser_mesh_data[0].NewAthenaArray(3);
   ruser_mesh_data[1].NewAthenaArray(3);
   ruser_mesh_data[2].NewAthenaArray(3);
-  ruser_mesh_data[3].NewAthenaArray(2);
+  
 
   // enroll the BCs
   if(mesh_bcs[OUTER_X1] == GetBoundaryFlag("user")) {
@@ -154,8 +158,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     vcirc = sqrt((GM1+GM2)/sma);
     Omega_orb = vcirc/sma;
     // rotation of star and planet
-    omega_star = f_corot_star * Omega_orb;
-    omega_planet = f_corot_planet * Omega_orb;
+    //omega_star = f_corot_star * Omega_orb;
+    //omega_planet = f_corot_planet * Omega_orb;
     
     // set the initial conditions for the pos/vel of the secondary
     xi[0] = sma*(1.0 + ecc);  // apocenter
@@ -185,8 +189,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
       ruser_mesh_data[2](i)  = Omega[i];
     }
 
-    ruser_mesh_data[3](0) = omega_planet;
-    ruser_mesh_data[3](1) = omega_star;
+    //ruser_mesh_data[3](0) = omega_planet;
+    //ruser_mesh_data[3](1) = omega_star;
     
     
   }else{
@@ -212,17 +216,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "corotating frame? = "<< corotating_frame<<"\n";
     std::cout << "particle substeping n="<<n_particle_substeps<<"\n";
     std::cout << "==========================================================\n";
-    std::cout << "==========   BC INFO         =============================\n";
-    std::cout << "==========================================================\n";
-    std::cout << "rho_surface (planet) = "<< rho_surface <<"\n";
-    std::cout << "lambda (planet) = "<< lambda <<"\n";
-    std::cout << "press_surface (planet) =" << rho_surface*GM1/(r_inner*gamma_gas*lambda) <<"\n";
-    std::cout << "temperature_surface (planet) =" << (rho_surface*GM1/(r_inner*gamma_gas*lambda)) / ( rho_surface * 8.3145e7) <<"\n";
-    std::cout << "rho_surface (star) = "<< rho_surface_star <<"\n";
-    std::cout << "lambda (star) = "<< lambda_star <<"\n";
-    std::cout << "press_surface (star) =" << rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star) <<"\n";
-    std::cout << "temperature_surface (star) =" << (rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star)) / ( rho_surface_star * 8.3145e7) <<"\n";
-    std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
     std::cout << "==========================================================\n";
     std::cout << "x ="<<xi[0]<<"\n";
@@ -238,7 +231,20 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
 
+Real vr_ejecta(Real r)
+{
+  return (r - r_inner)* (vinf_max_ejecta - vinf_min_ejecta)/(r_max_ejecta-r_inner) + vinf_min_ejecta;
+}
 
+Real dmdv_ejecta(Real v)
+{
+  // normalization of the ejecta distribution
+  // dmdv = dmdv0 * (v/v0)^dlogmdlogv_ejecta
+  Real v0 = std::sqrt(GM1/r_inner);
+  Real v_integral_factor = pow((1/v0),dlogmdlogv_ejecta) * ( pow(vinf_max_ejecta,dlogmdlogv_ejecta+1) - pow(vinf_min_ejecta,dlogmdlogv_ejecta+1) ) / (dlogmdlogv_ejecta +1);
+  Real dmdv0 = m_ejecta / v_integral_factor;
+  return  dmdv0 * pow(v/v0, dlogmdlogv_ejecta);
+}
 
 
 
@@ -280,15 +286,26 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	Real vr,vth,vph;
 
-	// Near planet
-	if(initialize_planet_wind == true & r<=sma/2){
-	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
-	  // constant angular momentum of surface
-	  den = rho_surface * pow((r/r_inner),-8);
-	  pres = press_surface * pow(den / rho_surface, gamma_gas);
-	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
+
+	// Initialize ejecta 
+	if(r<=r_max_ejecta){
+	  // ejecta given the velocity distribution
+	  vr = vr_ejecta(r);
+	  vth  = 0.0;
+	  vph  = - Omega[2]*Rcyl;   //omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+
+	  Real dmdv = dmdv_ejecta(vr);
+	  Real delta_v = vr_ejecta(pcoord->x1f(i+1)) -  vr_ejecta(pcoord->x1f(i));
+	  Real mr = dmdv * delta_v;
+	  den  = mr / (4.*3.14159* r*r*(pcoord->x1f(i+1) - pcoord->x1f(i)) ); 
+	  pres = pa;
+	  
+	}else{
+	  den = da;
+	  pres= pa;
+	  vr  = 0.0;
 	  vth = 0.0;
-	  vph = omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	  vph = - Omega[2]*Rcyl;
 	}
 	
 	phydro->u(IDN,k,j,i) = std::max(den,da);
@@ -322,16 +339,13 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       vi[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
       Omega[i] = pmb->pmy_mesh->ruser_mesh_data[2](i);
     }
-    omega_planet = pmb->pmy_mesh->ruser_mesh_data[3](0);
-    omega_star   = pmb->pmy_mesh->ruser_mesh_data[3](1);
-
+    
     // print some info
     if (Globals::my_rank==0){
       std::cout << "*** Setting initial conditions for t>0 ***\n";
       std::cout <<"xi="<<xi[0]<<" "<<xi[1]<<" "<<xi[2]<<"\n";
       std::cout <<"vi="<<vi[0]<<" "<<vi[1]<<" "<<vi[2]<<"\n";
       std::cout <<"Omega="<<Omega[0]<<" "<<Omega[1]<<" "<<Omega[2]<<"\n";
-      std::cout << "omega_planet ="<<omega_planet<<"  omega_star ="<<omega_star<<"\n";
     }
     is_restart=0;
   }

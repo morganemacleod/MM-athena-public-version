@@ -89,6 +89,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   lambda = pin->GetOrAddReal("problem","lambda",5.0);
 
   sma = pin->GetOrAddReal("problem","sma",1.0);
+  Real phi_crit_o_phi_L1 = pin->GetOrAddReal("problem","phi_critical_o_phi_L1",1.0);
   Real Omega_orb, vcirc;
  
 
@@ -125,7 +126,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   
   Real phi_L1 = PhiL1();
-  phi_critical = phi_L1;
+  phi_critical = phi_crit_o_phi_L1*phi_L1;
   
   // Print out some info
   if (Globals::my_rank==0){
