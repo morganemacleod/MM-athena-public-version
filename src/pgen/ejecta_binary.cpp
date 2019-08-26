@@ -239,7 +239,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 Real vr_ejecta(Real r)
 {
-  return (r - r_inner)* (vinf_max_ejecta - vinf_min_ejecta)/(r_max_ejecta-r_inner) + vinf_min_ejecta;
+  Real vesc_r = std::sqrt(2*GM1/r);
+  return (r - r_inner)* (vinf_max_ejecta - vinf_min_ejecta)/(r_max_ejecta-r_inner) + vinf_min_ejecta + vesc_r;
 }
 
 Real dmdv_ejecta(Real v)
