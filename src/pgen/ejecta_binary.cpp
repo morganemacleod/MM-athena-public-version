@@ -43,6 +43,8 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,Face
 void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
+int RefinementCondition(MeshBlock *pmb);
+
 
 void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
 void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
@@ -81,6 +83,7 @@ int is_restart;
 Real m_ejecta, vinf_min_ejecta, vinf_max_ejecta, dlogmdlogv_ejecta; // ejecta variables
 Real r_max_ejecta;
 Real r_inner;
+Real x1_min_derefine;
 
 Real da,pa;
 
@@ -118,7 +121,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
    
   r_max_ejecta = pin->GetReal("problem","r_max_ejecta");
   r_inner = pin->GetReal("mesh","x1min");
-
+  x1_min_derefine = pin->GetReal("problem","r_max_ejecta");
 
 
 
@@ -139,6 +142,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     EnrollUserBoundaryFunction(OUTER_X1, DiodeOuterX1);
   }
 
+   // Enroll AMR
+  if(adaptive==true)
+    EnrollUserRefinementCondition(RefinementCondition);
 
   // Enroll a Source Function
   EnrollUserExplicitSourceFunction(TwoPointMass);
@@ -241,7 +247,7 @@ Real dmdv_ejecta(Real v)
   // normalization of the ejecta distribution
   // dmdv = dmdv0 * (v/v0)^dlogmdlogv_ejecta
   Real v0 = std::sqrt(GM1/r_inner);
-  Real v_integral_factor = pow((1/v0),dlogmdlogv_ejecta) * ( pow(vinf_max_ejecta,dlogmdlogv_ejecta+1) - pow(vinf_min_ejecta,dlogmdlogv_ejecta+1) ) / (dlogmdlogv_ejecta +1);
+  Real v_integral_factor =  pow((1.0/v0),dlogmdlogv_ejecta) * ( pow(vinf_max_ejecta,dlogmdlogv_ejecta+1.0) - pow(vinf_min_ejecta,dlogmdlogv_ejecta+1.0) ) / (dlogmdlogv_ejecta +1.0);
   Real dmdv0 = m_ejecta / v_integral_factor;
   return  dmdv0 * pow(v/v0, dlogmdlogv_ejecta);
 }
@@ -466,6 +472,40 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 
 
 
+
+int RefinementCondition(MeshBlock *pmb)
+{
+  Real mindist=1.e99;
+  Real rmin = 1.e99;
+  int inregion = 0;
+  for(int k=pmb->ks; k<=pmb->ke; k++){
+    Real ph= pmb->pcoord->x3v(k);
+    Real sin_ph = sin(ph);
+    Real cos_ph = cos(ph);
+    for(int j=pmb->js; j<=pmb->je; j++) {
+      Real th= pmb->pcoord->x2v(j);
+      Real sin_th = sin(th);
+      Real cos_th = cos(th);
+      for(int i=pmb->is; i<=pmb->ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real x = r*sin_th*cos_ph;
+	Real y = r*sin_th*sin_ph;
+	Real z = r*cos_th;
+	Real dist = std::sqrt(SQR(x-xi[0]) +
+			      SQR(y-xi[1]) +
+			      SQR(z-xi[2]) );
+	mindist = std::min(mindist,dist);
+	rmin    = std::min(rmin,r);
+      }
+    }
+  }
+  // derefine when away from pm & static region
+  if( (mindist > 4.0*rsoft2) && rmin>x1_min_derefine  ) return -1;
+  // refine near point mass 
+  if(mindist <= 3.0*rsoft2) return 1;
+   // otherwise do nothing
+  return 0;
+}
 
 
 
