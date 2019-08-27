@@ -621,10 +621,11 @@ int RefinementCondition(MeshBlock *pmb)
       }
     }
   }
+
   // derefine when away from pm & static region
-  if( (mindist > 4.0*rsoft2) && rmin>x1_min_derefine  ) return -1;
-  // refine near point mass 
-  if(mindist <= 3.0*rsoft2) return 1;
+  if( (mindist > 4.0*radius_star) && rmin>x1_min_derefine  ) return -1;
+  // refine near point mass
+  if(mindist <= 3.0*radius_star) return 1;
    // otherwise do nothing
   return 0;
 }
