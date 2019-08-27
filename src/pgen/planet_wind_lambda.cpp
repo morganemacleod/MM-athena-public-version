@@ -58,6 +58,7 @@ Real mdotp(MeshBlock *pmb, int iout);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
+int RefinementCondition(MeshBlock *pmb);
 
 // global (to this file) problem parameters
 Real gamma_gas; 
@@ -85,6 +86,8 @@ Real omega_planet, omega_star; // rotation of planet and star boundaries
 
 bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
 Real da,pa;
+
+Real x1_min_derefine; // for AMR
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -121,6 +124,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
    
   r_inner = pin->GetReal("mesh","x1min");
+  x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
 
   initialize_planet_wind = pin->GetBoolean("problem","initialize_planet_wind"); 
 
@@ -152,6 +156,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // Enroll extra history output
   AllocateUserHistoryOutput(1);
   EnrollUserHistoryOutput(0, mdotp, "mdotp");
+
+   // Enroll AMR
+  if(adaptive==true)
+    EnrollUserRefinementCondition(RefinementCondition);
 
   // always write at startup
   trackfile_next_time = time;
@@ -581,6 +589,46 @@ Real mdotp(MeshBlock *pmb, int iout){
   
   return mdot;
 }
+
+
+
+
+
+
+int RefinementCondition(MeshBlock *pmb)
+{
+  Real mindist=1.e99;
+  Real rmin = 1.e99;
+  int inregion = 0;
+  for(int k=pmb->ks; k<=pmb->ke; k++){
+    Real ph= pmb->pcoord->x3v(k);
+    Real sin_ph = sin(ph);
+    Real cos_ph = cos(ph);
+    for(int j=pmb->js; j<=pmb->je; j++) {
+      Real th= pmb->pcoord->x2v(j);
+      Real sin_th = sin(th);
+      Real cos_th = cos(th);
+      for(int i=pmb->is; i<=pmb->ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real x = r*sin_th*cos_ph;
+	Real y = r*sin_th*sin_ph;
+	Real z = r*cos_th;
+	Real dist = std::sqrt(SQR(x-xi[0]) +
+			      SQR(y-xi[1]) +
+			      SQR(z-xi[2]) );
+	mindist = std::min(mindist,dist);
+	rmin    = std::min(rmin,r);
+      }
+    }
+  }
+  // derefine when away from pm & static region
+  if( (mindist > 4.0*rsoft2) && rmin>x1_min_derefine  ) return -1;
+  // refine near point mass 
+  if(mindist <= 3.0*rsoft2) return 1;
+   // otherwise do nothing
+  return 0;
+}
+
 
 
 

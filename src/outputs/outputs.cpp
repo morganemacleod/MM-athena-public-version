@@ -68,6 +68,8 @@
 #include "../mesh/mesh.hpp"
 #include "../parameter_input.hpp"
 #include "outputs.hpp"
+//MM
+#include "../globals.hpp"
 
 //----------------------------------------------------------------------------------------
 // OutputType constructor
@@ -112,6 +114,13 @@ Outputs::Outputs(Mesh *pm, ParameterInput *pin) {
       op.next_time = pin->GetOrAddReal(op.block_name,"next_time", pm->time);
       op.dt = pin->GetReal(op.block_name,"dt");
 
+
+      //MM:
+      if (Globals::my_rank==0){
+	std::cout<<"OUTPUT DEFINED: "<<op.block_name<<" "<<op.next_time<<" "<<op.dt<<"\n";
+      }
+
+      
       if (op.dt > 0.0) {  // only add output if dt>0
 
         // set file number, basename, id, and format
