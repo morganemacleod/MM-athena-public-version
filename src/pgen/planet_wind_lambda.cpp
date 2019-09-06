@@ -644,43 +644,43 @@ void MeshBlock::UserWorkInLoop(void) {
   }
 
 
-  // Add floor diagnostics
-  Real dfloor = peos->GetDensityFloor();
-  Real pfloor = peos->GetPressureFloor();
-   for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-      for (int i=is; i<=ie; i++) {
-	Real den = phydro->u(IDN,k,j,i);
-	Real Eth = phydro->u(IEN,k,j,i) -
-	  ( 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)) + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i));
-	Real press = Eth*(gamma_gas -1.);
+  // // Add floor diagnostics
+  // Real dfloor = peos->GetDensityFloor();
+  // Real pfloor = peos->GetPressureFloor();
+  //  for (int k=ks; k<=ke; k++) {
+  //   for (int j=js; j<=je; j++) {
+  //     for (int i=is; i<=ie; i++) {
+  // 	Real den = phydro->u(IDN,k,j,i);
+  // 	Real Eth = phydro->u(IEN,k,j,i) -
+  // 	  ( 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)) + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i));
+  // 	Real press = Eth*(gamma_gas -1.);
 
-	if (den == dfloor || press==pfloor){
-	  std::cout << "reseting floored var \n";
-	  phydro->u(IDN,k+1,j,i)  = (phydro->u(IDN,k+1,j,i) + phydro->u(IDN,k-1,j,i) +
-				     phydro->u(IDN,k,j+1,i) + phydro->u(IDN,k,j-1,i) +
-				     phydro->u(IDN,k,j,i+1) + phydro->u(IDN,k,j,i-1) )/ 6.;
+  // 	if (den == dfloor || press==pfloor){
+  // 	  std::cout << "reseting floored var \n";
+  // 	  phydro->u(IDN,k+1,j,i)  = (phydro->u(IDN,k+1,j,i) + phydro->u(IDN,k-1,j,i) +
+  // 				     phydro->u(IDN,k,j+1,i) + phydro->u(IDN,k,j-1,i) +
+  // 				     phydro->u(IDN,k,j,i+1) + phydro->u(IDN,k,j,i-1) )/ 6.;
 
-	  phydro->u(IM1,k+1,j,i)  = (phydro->u(IM1,k+1,j,i) + phydro->u(IM1,k-1,j,i) +
-				     phydro->u(IM1,k,j+1,i) + phydro->u(IM1,k,j-1,i) +
-				     phydro->u(IM1,k,j,i+1) + phydro->u(IM1,k,j,i-1) )/ 6.;
+  // 	  phydro->u(IM1,k+1,j,i)  = (phydro->u(IM1,k+1,j,i) + phydro->u(IM1,k-1,j,i) +
+  // 				     phydro->u(IM1,k,j+1,i) + phydro->u(IM1,k,j-1,i) +
+  // 				     phydro->u(IM1,k,j,i+1) + phydro->u(IM1,k,j,i-1) )/ 6.;
 	  
-	  phydro->u(IM2,k+1,j,i)  = (phydro->u(IM2,k+1,j,i) + phydro->u(IM2,k-1,j,i) +
-				     phydro->u(IM2,k,j+1,i) + phydro->u(IM2,k,j-1,i) +
-				     phydro->u(IM2,k,j,i+1) + phydro->u(IM2,k,j,i-1) )/ 6.;
+  // 	  phydro->u(IM2,k+1,j,i)  = (phydro->u(IM2,k+1,j,i) + phydro->u(IM2,k-1,j,i) +
+  // 				     phydro->u(IM2,k,j+1,i) + phydro->u(IM2,k,j-1,i) +
+  // 				     phydro->u(IM2,k,j,i+1) + phydro->u(IM2,k,j,i-1) )/ 6.;
 
-	  phydro->u(IM3,k+1,j,i)  = (phydro->u(IM3,k+1,j,i) + phydro->u(IM3,k-1,j,i) +
-				     phydro->u(IM3,k,j+1,i) + phydro->u(IM3,k,j-1,i) +
-				     phydro->u(IM3,k,j,i+1) + phydro->u(IM3,k,j,i-1) )/ 6.;
+  // 	  phydro->u(IM3,k+1,j,i)  = (phydro->u(IM3,k+1,j,i) + phydro->u(IM3,k-1,j,i) +
+  // 				     phydro->u(IM3,k,j+1,i) + phydro->u(IM3,k,j-1,i) +
+  // 				     phydro->u(IM3,k,j,i+1) + phydro->u(IM3,k,j,i-1) )/ 6.;
 	  
-	  phydro->u(IEN,k+1,j,i)  = (phydro->u(IEN,k+1,j,i) + phydro->u(IEN,k-1,j,i) +
-				     phydro->u(IEN,k,j+1,i) + phydro->u(IEN,k,j-1,i) +
-				     phydro->u(IEN,k,j,i+1) + phydro->u(IEN,k,j,i-1) )/ 6.;
-	}
+  // 	  phydro->u(IEN,k+1,j,i)  = (phydro->u(IEN,k+1,j,i) + phydro->u(IEN,k-1,j,i) +
+  // 				     phydro->u(IEN,k,j+1,i) + phydro->u(IEN,k,j-1,i) +
+  // 				     phydro->u(IEN,k,j,i+1) + phydro->u(IEN,k,j,i-1) )/ 6.;
+  // 	}
 	
-      }
-    }
-   }
+  //     }
+  //   }
+  //  }
   
   return;
 }
