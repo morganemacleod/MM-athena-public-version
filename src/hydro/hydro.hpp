@@ -42,7 +42,7 @@ public:
   HydroDiffusion *phdif;
 
   // functions
-  Real NewBlockTimeStep(void);    // computes new timestep on a MeshBlock
+  Real NewBlockTimeStep(int diagnostic_output=0);    // computes new timestep on a MeshBlock
   void WeightedAveU(AthenaArray<Real> &u_out, AthenaArray<Real> &u_in1,
     AthenaArray<Real> &u_in2, const Real wght[3]);
   void AddFluxDivergenceToAverage(AthenaArray<Real> &w, AthenaArray<Real> &bcc,

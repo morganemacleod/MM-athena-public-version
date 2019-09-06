@@ -60,6 +60,7 @@ Real pspline(Real r, Real eps);
 
 int RefinementCondition(MeshBlock *pmb);
 
+
 // global (to this file) problem parameters
 Real gamma_gas; 
 //Real da,pa; // ambient density, pressure
@@ -629,6 +630,26 @@ int RefinementCondition(MeshBlock *pmb)
    // otherwise do nothing
   return 0;
 }
+
+
+
+
+void MeshBlock::UserWorkInLoop(void) {
+  // Add timestep diagnostics
+  if(pmy_mesh->ncycle % 10 == 0){
+    if(new_block_dt == pmy_mesh->dt){
+      // call NewBlockTimeStep with extra diagnostic output
+      phydro->NewBlockTimeStep(1);
+    }
+  }
+  return;
+}
+
+
+
+
+
+
 
 
 

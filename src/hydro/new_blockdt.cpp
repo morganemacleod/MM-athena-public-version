@@ -35,7 +35,7 @@
 // \!fn Real Hydro::NewBlockTimeStep(void)
 // \brief calculate the minimum timestep within a MeshBlock
 
-Real Hydro::NewBlockTimeStep(void) {
+Real Hydro::NewBlockTimeStep(int diagnostic_output) {
   MeshBlock *pmb=pmy_block;
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;
@@ -55,6 +55,8 @@ Real Hydro::NewBlockTimeStep(void) {
   Real wi[(NWAVE)];
 
   Real min_dt = (FLT_MAX);
+  Real i_min, j_min, k_min; // MM
+  Real dt1_min, dt2_min, dt3_min; // MM
 
   for (int k=ks; k<=ke; ++k) {
     for (int j=js; j<=je; ++j) {
@@ -111,6 +113,15 @@ Real Hydro::NewBlockTimeStep(void) {
       for (int i=is; i<=ie; ++i) {
         Real& dt_1 = dt1(i);
         min_dt = std::min(min_dt,dt_1);
+	// MM:
+	if(diagnostic_output==1 && dt_1==min_dt){
+	  i_min = i;
+	  j_min = j;
+	  k_min = k;
+	  dt1_min = dt1(i);
+	  dt2_min = dt2(i);
+	  dt3_min = dt3(i);
+	}
       }
 
       // if grid is 2D/3D, compute minimum of (v2 +/- C)
@@ -118,6 +129,15 @@ Real Hydro::NewBlockTimeStep(void) {
         for (int i=is; i<=ie; ++i) {
           Real& dt_2 = dt2(i);
           min_dt = std::min(min_dt,dt_2);
+	  // MM:
+	  if(diagnostic_output==1 && dt_2==min_dt){
+	    i_min = i;
+	    j_min = j;
+	    k_min = k;
+	    dt1_min = dt1(i);
+	    dt2_min = dt2(i);
+	    dt3_min = dt3(i);
+	  }
         }
       }
 
@@ -126,9 +146,17 @@ Real Hydro::NewBlockTimeStep(void) {
         for (int i=is; i<=ie; ++i) {
           Real& dt_3 = dt3(i);
           min_dt = std::min(min_dt,dt_3);
+	  // MM:
+	  if(diagnostic_output==1 && dt_3==min_dt){
+	    i_min = i;
+	    j_min = j;
+	    k_min = k;
+	    dt1_min = dt1(i);
+	    dt2_min = dt2(i);
+	    dt3_min = dt3(i);
+	  }
         }
       }
-
     }
   }
 
@@ -155,5 +183,19 @@ Real Hydro::NewBlockTimeStep(void) {
   }
 
   pmb->new_block_dt=min_dt;
+
+  // MM: diagnostic output
+  if(diagnostic_output==1){
+    std::cout<<"min dt: x1="<<pmb->pcoord->x1v(i_min)
+	     <<" x2="<<pmb->pcoord->x2v(j_min)
+	     <<" x3="<<pmb->pcoord->x3v(k_min)
+	     <<" dt1="<<dt1_min*pmb->pmy_mesh->cfl_number
+	     <<" dt2="<<dt2_min*pmb->pmy_mesh->cfl_number
+	     <<" dt3="<<dt3_min*pmb->pmy_mesh->cfl_number<<"\n";
+  }
+
+
+
+
   return min_dt;
 }
