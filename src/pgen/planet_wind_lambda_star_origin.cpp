@@ -600,9 +600,6 @@ int RefinementCondition(MeshBlock *pmb)
 {
   Real mindist=1.e99;
   Real rmin = 1.e99;
-  int inregion = 0;
-  AthenaArray<Real> &w = pmb->phydro->w;
-  Real maxeps=0.0;
   for(int k=pmb->ks; k<=pmb->ke; k++){
     Real ph= pmb->pcoord->x3v(k);
     Real sin_ph = sin(ph);
