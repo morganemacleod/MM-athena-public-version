@@ -601,6 +601,8 @@ int RefinementCondition(MeshBlock *pmb)
   Real mindist=1.e99;
   Real rmin = 1.e99;
   int inregion = 0;
+  AthenaArray<Real> &w = pmb->phydro->w;
+  Real maxeps=0.0;
   for(int k=pmb->ks; k<=pmb->ke; k++){
     Real ph= pmb->pcoord->x3v(k);
     Real sin_ph = sin(ph);
@@ -619,16 +621,15 @@ int RefinementCondition(MeshBlock *pmb)
 			      SQR(z-xi[2]) );
 	mindist = std::min(mindist,dist);
 	rmin    = std::min(rmin,r);
+
       }
     }
   }
 
-  // derefine when away from pm & static region
-  if( (mindist > 4.0*radius_planet) && rmin>x1_min_derefine  ) return -1;
-  // refine near point mass
   if(mindist <= 3.0*radius_planet) return 1;
-   // otherwise do nothing
-  return 0;
+  else if(mindist > 4.0*radius_planet) return -1;
+  else return 0;
+
 }
 
 
