@@ -1,0 +1,108 @@
+<job>
+problem_id = PLANET_WIND_LAMBDA_2d_W107     # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.e3      # time increment between outputs
+xdmf = 0
+#x2_slice = 1.5707963267948966
+
+<output2>
+file_type  = hst      # history
+dt         = 1.e3   # time increment between outputs
+
+#<output3>
+#file_type  = rst      # restart
+#dt         = 1.0e11     # time increment between outputs
+
+
+<time>
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1      # cycle limit
+tlim       = 1.0e6       # time limit
+
+<mesh>
+nx1        = 112        # Number of zones in X1-direction
+x1rat      = 1.0341216628326853        # ratio between adjacent cell sizes
+x1min      = 7.e10        # minimum value of X1
+x1max      = 3.2e12       # maximum value of X1
+ix1_bc     = reflecting   # inner-X1 boundary flag
+ox1_bc     = user    # outer-X1 boundary flag
+
+nx2        = 4             # Number of zones in X2-direction
+x2min      = 1.3744467859455345            # minimum value of X2
+x2max      = 1.7671458676442586   # maximum value of X2
+ix2_bc     = outflow        # inner-X2 boundary flag
+ox2_bc     = outflow        # outer-X2 boundary flag
+
+nx3        = 192          # Number of zones in X3-direction
+x3min      = -3.141592653589793 # minimum value of X3
+x3max      =  3.141592653589793 # maximum value of X3
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
+
+
+refinement     = adaptive
+numlevel       = 6
+deref_count    = 5
+
+<refinement3>
+level = 3
+x1min = 7.5e11
+x1max = 8.9e11
+x2min = 1.3744467859455345 
+x2max = 1.7671458676442586
+x3min = -0.25
+x3max = 0.25
+
+
+
+
+<meshblock>
+nx1        = 16        # Number of zones per MeshBlock in X1-direction
+nx2        = 4         # Number of zones per MeshBlock in X2-direction
+nx3        = 16         # Number of zones per MeshBlock in X3-direction
+
+<hydro>
+gamma           = 1.01 #1.6666666666666667  # gamma = C_p/C_v
+iso_sound_speed = 1.0
+dfloor = 1.e-30
+pfloor = 1.e-20
+
+
+<problem>
+Ggrav           = 6.674e-8
+
+## orbit 
+sma             = 8.228e11
+ecc             = 0.0
+
+### planet
+M2              = 2.259e29
+rho_surface_planet = 1.e-15 #1.e-11
+lambda_planet = 5.0
+f_corotation_planet = 1.0
+radius_planet = 6.72e9  
+rsoft2      =   3.3e9
+
+### star
+M1              = 1.3724e33
+rho_surface_star = 2.0e-18
+lambda_star = 5.0
+f_corotation_star = 1.0
+
+### numerical
+corotating_frame = 1 # flag whether to do simulation in frame that rotates around COM at initial orbital frequency
+gas_backreaction = 0 # flag to include gas effect on orbit
+n_particle_substeps = 1 # how many particle integration substeps per timestep?
+
+## ambient "background"
+damb = 1.e-24
+pamb = 1.e-13
+
+
+### trackfile output 
+trackfile_dt = 1.e3  # dt for printing particle properties
+
+
