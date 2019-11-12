@@ -237,10 +237,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "lambda (star) = "<< lambda_star <<"\n";
     std::cout << "press_surface (star) =" << rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star) <<"\n";
     std::cout << "temperature_surface (star) =" << (rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star)) / ( rho_surface_star * 8.3145e7) <<"\n";
+    std::cout << "estimated mdot (star) = "<<3.14*rho_surface_star*sqrt(GM2*pow(r_inner*lambda_star,3))*exp(1.5-lambda_star) <<"\n";
     std::cout << "rho_surface (planet) = "<< rho_surface_planet <<"\n";
     std::cout << "lambda (planet) = "<< lambda_planet <<"\n";
     std::cout << "press_surface (planet) =" << rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet) <<"\n";
     std::cout << "temperature_surface (planet) =" << (rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet)) / ( rho_surface_planet * 8.3145e7) <<"\n";
+    std::cout << "estimated mdot (planet) = "<<3.14*rho_surface_planet*sqrt(GM2*pow(radius_planet*lambda_planet,3))*exp(1.5-lambda_planet) <<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
     std::cout << "==========================================================\n";
