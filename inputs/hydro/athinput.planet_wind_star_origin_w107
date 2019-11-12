@@ -80,7 +80,7 @@ ecc             = 0.0
 
 ### planet
 M2              = 2.259e29
-rho_surface_planet = 1.e-15 #1.e-11
+rho_surface_planet = 1.e-15 
 lambda_planet = 5.0
 f_corotation_planet = 1.0
 radius_planet = 6.72e9  
