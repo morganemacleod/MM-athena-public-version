@@ -114,8 +114,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   wind_mdot = pin->GetOrAddReal("problem","wind_mdot",1.e-10);
   wind_v_o_vesc = pin->GetOrAddReal("problem","wind_vel_factor",1.0);
   wind_mach_initial = pin->GetOrAddReal("problem","wind_mach_initial",1.0);
- 
 
+ 
   // fixed orbit parameters
   fixed_orbit = pin->GetOrAddBoolean("problem","fixed_orbit",false);
   Omega_orb_fixed = pin->GetOrAddReal("problem","omega_orb_fixed",0.5);

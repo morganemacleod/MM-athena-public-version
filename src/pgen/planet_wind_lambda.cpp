@@ -90,6 +90,8 @@ Real da,pa;
 
 Real x1_min_derefine; // for AMR
 
+Real ANG_MOM_DIR = 2;
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -175,35 +177,59 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     // rotation of star and planet
     omega_star = f_corot_star * Omega_orb;
     omega_planet = f_corot_planet * Omega_orb;
-    
-    // set the initial conditions for the pos/vel of the secondary
-    xi[0] = sma*(1.0 + ecc);  // apocenter
-    xi[1] = 0.0;
-    xi[2] = 0.0;
-    
-    vi[0] = 0.0;
-    vi[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
-    vi[2] = 0.0;
-    
-    // now set the initial condition for Omega
-    Omega[0] = 0.0;
-    Omega[1] = 0.0;
-    Omega[2] = 0.0;
-    
-    // In the case of a corotating frame,
-    // subtract off the frame velocity and set Omega
-    if(corotating_frame == 1){
-      Omega[2] = Omega_orb;
-      vi[1] -=  Omega[2]*xi[0]; 
-    }
 
+    // set the initial conditions for the pos/vel of the secondary
+    if(ANG_MOM_DIR == 2){
+      xi[0] = sma*(1.0 + ecc);  // apocenter
+      xi[1] = 0.0;
+      xi[2] = 0.0;
+      
+      vi[0] = 0.0;
+      vi[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
+      vi[2] = 0.0;
+    
+      // now set the initial condition for Omega
+      Omega[0] = 0.0;
+      Omega[1] = 0.0;
+      Omega[2] = 0.0;
+    
+      // In the case of a corotating frame,
+      // subtract off the frame velocity and set Omega
+      if(corotating_frame == 1){
+	Omega[2] = Omega_orb;
+	vi[1] -=  Omega[2]*xi[0]; 
+      }
+    }else if(ANG_MOM_DIR == 1){
+      xi[0] = 0.0;  
+      xi[1] = 0.0;
+      xi[2] = sma*(1.0 + ecc); // apocenter
+      
+      vi[0] = sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
+      vi[1]= 0.0;
+      vi[2] = 0.0;
+      
+      // now set the initial condition for Omega
+      Omega[0] = 0.0;
+      Omega[1] = 0.0;
+      Omega[2] = 0.0;
+      
+      // In the case of a corotating frame,
+      // subtract off the frame velocity and set Omega
+      if(corotating_frame == 1){
+	Omega[1] = Omega_orb;
+	vi[0] -=  Omega[1]*xi[2]; 
+      }
+    }
+    
+    
+    
     // save the ruser_mesh_data variables
     for(int i=0; i<3; i++){
       ruser_mesh_data[0](i)  = xi[i];
       ruser_mesh_data[1](i)  = vi[i];
       ruser_mesh_data[2](i)  = Omega[i];
     }
-
+    
     ruser_mesh_data[3](0) = omega_planet;
     ruser_mesh_data[3](1) = omega_star;
     
