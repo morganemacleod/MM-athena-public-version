@@ -589,7 +589,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
     }
   } // end loop over innermost blocks
 
-
+ 
 
 }
 
