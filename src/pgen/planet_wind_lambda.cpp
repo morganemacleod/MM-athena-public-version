@@ -269,8 +269,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 } // end
 
 
-void SphericaltoCartesian(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z);
-{
+void SphericaltoCartesian(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z){
   // spherical polar coordinates, get local cartesian           
   x = r*sin(th)*cos(ph);
   y = r*sin(th)*sin(ph);
@@ -278,15 +277,23 @@ void SphericaltoCartesian(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z
 }
 
 void SphericaltoCartesian_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz){
-  vx = sin(th)*cos(ph)*vr + cos(th)*cos(ph)*vth - sin(ph)*vph;
-  vy = sin(th)*sin(ph)*vr + cos(th)*sin(ph)*vth + cos(ph)*vph;
-  vz = cos(th)*vr - sin(th)*vph;
+  Real sin_th = sin(th);
+  Real cos_th = cos(th);
+  Real sin_ph = sin(ph);
+  Real cos_ph = cos(ph);
+  vx = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
+  vy = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
+  vz = cos_th*vr - sin_th*vph;
 
 }
 void CartesiantoSpherical_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz){
-  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-  vph = -sin(ph)*vx + cos(ph)*vy;
+  Real sin_th = sin(th);
+  Real cos_th = cos(th);
+  Real sin_ph = sin(ph);
+  Real cos_ph = cos(ph);
+  vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
+  vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
+  vph = -sin_ph*vx + cos_ph*vy;
 }
 
 
@@ -321,6 +328,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	Real x,y,z;
 	SphericaltoCartesian(r,th,ph,x,y,z);
+	Real Rcyl = sqrt(x*x + y*y);
+	
 	
 	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
 	// location relative to point mass 2 (star)
@@ -374,7 +383,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface * pow(den / rho_surface, gamma_gas);
 	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
 	  vth = 0.0;
-	  vph = omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	  vph = 0.0; // omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
 	}
 	
 	phydro->u(IDN,k,j,i) = std::max(den,da);
@@ -448,21 +457,20 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	Real a_r1 = -GM1*pmb->pcoord->coord_src1_i_(i)/r;
 	
 	// PM2 gravitational accels in cartesian coordinates
-	Real a_x = - GM2 * fspline(d2,rsoft2) * (x-x_2);   
-	Real a_y = - GM2 * fspline(d2,rsoft2) * (y-y_2);  
-	Real a_z = - GM2 * fspline(d2,rsoft2) * (z-z_2);
+	Real a_x = - GM2 * fspline(d2,rsoft2) * (x-xi[0]);   
+	Real a_y = - GM2 * fspline(d2,rsoft2) * (y-xi[1]);  
+	Real a_z = - GM2 * fspline(d2,rsoft2) * (z-xi[2]);
 	
 	// add the correction for the orbiting frame (relative to the COM)
-	a_x += -  GM2 / d12c * x_2;
-	a_y += -  GM2 / d12c * y_2;
-	a_z += -  GM2 / d12c * z_2;
+	a_x += -  GM2 / d12c * xi[0];
+	a_y += -  GM2 / d12c * xi[1];
+	a_z += -  GM2 / d12c * xi[2];
 	
+	Real vr  = prim(IVX,k,j,i);
+	Real vth = prim(IVY,k,j,i);
+	Real vph = prim(IVZ,k,j,i);
+
 	if(corotating_frame == 1){
-	  
-	  Real vr  = prim(IVX,k,j,i);
-	  Real vth = prim(IVY,k,j,i);
-	  Real vph = prim(IVZ,k,j,i);
-	  
 	  // distance from the origin in cartesian (vector)
 	  Real rxyz[3];
 	  rxyz[0] = x;
