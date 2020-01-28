@@ -96,7 +96,7 @@ Real da,pa;
 
 Real x1_min_derefine; // for AMR
 
-Real POLE_DIR = 2;  // DIRECTION OF POLE OF THE SPHERICAL POLAR COORDINATE SYSTEM 0=x, 2=z
+Real POLE_DIR = 0;  // DIRECTION OF POLE OF THE SPHERICAL POLAR COORDINATE SYSTEM 0=x, 2=z
 
 
 
@@ -271,9 +271,15 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 void SphericaltoCartesian(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z){
   // spherical polar coordinates, get local cartesian           
-  x = r*sin(th)*cos(ph);
-  y = r*sin(th)*sin(ph);
-  z = r*cos(th);
+  if(POLE_DIR==2){
+    x = r*sin(th)*cos(ph);
+    y = r*sin(th)*sin(ph);
+    z = r*cos(th);
+  }else if(POLE_DIR==0){
+    y = r*sin(th)*cos(ph);
+    z = r*sin(th)*sin(ph);
+    x = r*cos(th);
+  }
 }
 
 void SphericaltoCartesian_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz){
@@ -281,20 +287,32 @@ void SphericaltoCartesian_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph
   Real cos_th = cos(th);
   Real sin_ph = sin(ph);
   Real cos_ph = cos(ph);
-  vx = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
-  vy = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
-  vz = cos_th*vr - sin_th*vph;
-
+  if(POLE_DIR==2){
+    vx = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
+    vy = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
+    vz = cos_th*vr - sin_th*vph;
+  }else if(POLE_DIR==0){
+    vy = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
+    vz = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
+    vx = cos_th*vr - sin_th*vph;
+  }
+  
 }
 void CartesiantoSpherical_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz){
   Real sin_th = sin(th);
   Real cos_th = cos(th);
   Real sin_ph = sin(ph);
   Real cos_ph = cos(ph);
-  vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
-  vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
-  vph = -sin_ph*vx + cos_ph*vy;
-}
+  if(POLE_DIR==2){
+    vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
+    vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
+    vph = -sin_ph*vx + cos_ph*vy;
+  }else if(POLE_DIR==0){
+    vr  = sin_th*cos_ph*vy + sin_th*sin_ph*vz + cos_th*vx;
+    vth = cos_th*cos_ph*vy + cos_th*sin_ph*vz - sin_th*vx;
+    vph = -sin_ph*vy + cos_ph*vz;
+  }
+ }
 
 
 
