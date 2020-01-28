@@ -373,19 +373,21 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vy = 0.0;
 	  vz = 0.0; 
 	}
-	CartesiantoSpherical_VEC(th,ph,vr,vth,vph,vx,vy,vz); // get vr,vth,vpi
-	
-	// Near planet POLE DIR CHECK
+
 	if(initialize_planet_wind == true & r<=sma/2){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface * pow((r/r_inner),-8);
 	  pres = press_surface * pow(den / rho_surface, gamma_gas);
 	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
-	  vth = 0.0;
-	  vph = 0.0; // omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	  Real az = std::atan2(y,x);
+	  Real polar = std::acos(z/r);
+	  vx = x/r*vr -sin(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  vy = y/r*vr +cos(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  vz = z/r*vr;   
 	}
 	
+        CartesiantoSpherical_VEC(th,ph,vr,vth,vph,vx,vy,vz); // get vr,vth,vpi
 	phydro->u(IDN,k,j,i) = std::max(den,da);
 	phydro->u(IM1,k,j,i) = den*vr;
 	phydro->u(IM2,k,j,i) = den*vth;
@@ -471,6 +473,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	Real vph = prim(IVZ,k,j,i);
 
 	if(corotating_frame == 1){
+
 	  // distance from the origin in cartesian (vector)
 	  Real rxyz[3];
 	  rxyz[0] = x;
@@ -526,8 +529,6 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
 
-
-
 	
 	// STAR BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
 	if(d2 <= radius_star){
@@ -554,33 +555,32 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	}
 
 
+	// PLANET BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
+	if((pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) && (i==pmb->is)) {
+	  Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
+	  Real Rcyl = sqrt(x*x + y*y);
+	  Real az = std::atan2(y,x);
+	  Real polar = std::acos(z/r);
+	  Real vx = -sin(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  Real vy = cos(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  Real vz = 0.0;
+	  Real vr,vth,vph;
+	  CartesiantoSpherical_VEC(th,ph,vr,vth,vph,vx,vy,vz); // get vr,vth,vpi
+	  cons(IDN,k,j,pmb->is) = rho_surface;
+	  cons(IM1,k,j,pmb->is) = rho_surface*vr;
+	  cons(IM2,k,j,pmb->is) = rho_surface*vth;
+	  cons(IM3,k,j,pmb->is) = rho_surface*vph;
+	  cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
+	  cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
+					+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
+	  
+	}
+
+	
+
       }
     }
   } // end loop over cells
-  
-
-  // POLE DIR REVISION NEEDED
-  // PLANET BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-  if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
-    for (int k=pmb->ks; k<=pmb->ke; k++) {
-      for (int j=pmb->js; j<=pmb->je; j++) {
-        Real r = pmb->pcoord->x1v(pmb->is);
-	Real th = pmb->pcoord->x2v(j); 
-	Real Rcyl = r*sin(th);
-	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
-	cons(IDN,k,j,pmb->is) = rho_surface;
-        cons(IM1,k,j,pmb->is) = 0.0;
-        cons(IM2,k,j,pmb->is) = 0.0;
-        cons(IM3,k,j,pmb->is) = rho_surface*(omega_planet-Omega[2])*Rcyl;
-        cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
-	cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
-				+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
-      }
-    }
-  } // end loop over innermost blocks
-
- 
-
 }
 
 
