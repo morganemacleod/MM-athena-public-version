@@ -98,7 +98,7 @@ Real da,pa;
 
 Real x1_min_derefine; // for AMR
 
-Real POLE_DIR = 2;  // DIRECTION OF ANGULAR MOMENTUM VECTOR OF THE ORBIT 0=x, 2=z
+Real POLE_DIR = 2;  // DIRECTION OF POLE OF THE SPHERICAL POLAR COORDINATE SYSTEM 0=x, 2=z
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -229,6 +229,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========   SIMULATION INFO =============================\n";
     std::cout << "==========================================================\n";
     std::cout << "POLE DIR =" << POLE_DIR << "\n";
+    std::cout << "==========================================================\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
@@ -313,18 +314,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 			pow(y-xi[1], 2) +
 			pow(z-xi[2], 2) );
 
-	if(ANG_MOM_DIR==2){
-	  Real R2 =  sqrt(pow(x-xi[0], 2) +
-			  pow(y-xi[1], 2) );
-	  Real phi2 = std::atan2(y-xi[1],x-xi[0]);
-	  Real th2 = std::acos((z-xi[2])/d2);
-	}else if(ANG_MOM_DIR==1){
-	  Real R2 =  sqrt(pow(z-xi[2], 2) +
-			  pow(x-xi[0], 2) );
-	  Real phi2 = std::atan2(x-xi[0],z-xi[2]);
-	  Real th2 = std::acos((y-xi[1])/d2);
-	}
-
+	Real R2 =  sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) );
+	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+	Real th2 = std::acos((z-xi[2])/d2);
+	
 	// surface parameters (star and planet)
 	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	Real cs_star = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
@@ -338,15 +332,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	if(d2 <= radius_star){
 	  den = rho_surface_star;
 	  pres = press_surface_star;
-	  if(ANG_MOM_DIR==2){
-	    vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
-	    vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
-	    vz = vi[2];
-	  }else if(ANG_MOM_DIR==1){
-	    vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
-	    vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
-	    vz = vi[2];
-	  }
+	  vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
+	  vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
+	  vz = vi[2];
 	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	  vph = -sin(ph)*vx + cos(ph)*vy;
@@ -355,15 +343,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
 	  // wind directed outward at v=cs
 	  // constant angular momentum of surface
-	  if(ANG_MOM_DIR==2){
-	    vx = (x-xi[0])/d2 * cs_star + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	    vy = (y-xi[1])/d2 * cs_star + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	    vz = (z-xi[2])/d2 * cs_star + vi[2];
-	  }else if(ANG_MOM_DIR==1){
-	    vx = (x-xi[0])/d2 * cs_star + vi[0] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[1]*Rcyl);  
-	    vy = (y-xi[1])/d2 * cs_star + vi[1]; 
-	    vz = (z-xi[2])/d2 * cs_star + vi[2] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[1]*Rcyl);  
-	  }
+	  vx = (x-xi[0])/d2 * cs_star + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
+	  vy = (y-xi[1])/d2 * cs_star + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
+	  vz = (z-xi[2])/d2 * cs_star + vi[2];
 	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	  vph = -sin(ph)*vx + cos(ph)*vy;
