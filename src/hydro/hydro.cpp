@@ -142,7 +142,7 @@ Hydro::Hydro(MeshBlock *pmb, ParameterInput *pin) :
   }
 
   // MM:get input related to zone-averaging
-  n_avg_.NewAthenaArray(ncells2);
+  n_avg_.NewAthenaArray(nc2);
   do_average_ = pin->GetOrAddBoolean("hydro","polar_average",false);
   if (do_average_== true and COORDINATE_SYSTEM != "spherical_polar"){
     std::stringstream msg;

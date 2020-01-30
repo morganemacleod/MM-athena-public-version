@@ -456,6 +456,7 @@ int main(int argc, char *argv[]) {
 
 
     pmesh->UserWorkInLoop();
+    pmesh->MeshUserWorkInLoop(pinput); // MM: keeping for the moment for backwards compatibility
 
     pmesh->ncycle++;
     pmesh->time += pmesh->dt;
