@@ -58,6 +58,14 @@ Real mdotp(MeshBlock *pmb, int iout);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
+int RefinementCondition(MeshBlock *pmb);
+
+void SphericaltoCartesian(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z);
+void CartesiantoSpherical(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z);
+void SphericaltoCartesian_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz);
+void CartesiantoSpherical_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz);
+
+
 
 // global (to this file) problem parameters
 Real gamma_gas; 
@@ -85,6 +93,13 @@ Real omega_planet, omega_star; // rotation of planet and star boundaries
 
 bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
 Real da,pa;
+
+Real x1_min_derefine; // for AMR
+
+Real POLE_DIR = 0;  // DIRECTION OF POLE OF THE SPHERICAL POLAR COORDINATE SYSTEM 0=x, 2=z
+
+
+
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -121,6 +136,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   radius_star = pin->GetOrAddReal("problem","radius_star",6.955e10);
    
   r_inner = pin->GetReal("mesh","x1min");
+  x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
 
   initialize_planet_wind = pin->GetBoolean("problem","initialize_planet_wind"); 
 
@@ -153,6 +169,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   AllocateUserHistoryOutput(1);
   EnrollUserHistoryOutput(0, mdotp, "mdotp");
 
+   // Enroll AMR
+  if(adaptive==true)
+    EnrollUserRefinementCondition(RefinementCondition);
+
   // always write at startup
   trackfile_next_time = time;
   trackfile_number = 0;
@@ -166,7 +186,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     // rotation of star and planet
     omega_star = f_corot_star * Omega_orb;
     omega_planet = f_corot_planet * Omega_orb;
-    
+
     // set the initial conditions for the pos/vel of the secondary
     xi[0] = sma*(1.0 + ecc);  // apocenter
     xi[1] = 0.0;
@@ -187,14 +207,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
       Omega[2] = Omega_orb;
       vi[1] -=  Omega[2]*xi[0]; 
     }
-
+     
     // save the ruser_mesh_data variables
     for(int i=0; i<3; i++){
       ruser_mesh_data[0](i)  = xi[i];
       ruser_mesh_data[1](i)  = vi[i];
       ruser_mesh_data[2](i)  = Omega[i];
     }
-
+    
     ruser_mesh_data[3](0) = omega_planet;
     ruser_mesh_data[3](1) = omega_star;
     
@@ -208,6 +228,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   if (Globals::my_rank==0){
     std::cout << "==========================================================\n";
     std::cout << "==========   SIMULATION INFO =============================\n";
+    std::cout << "==========================================================\n";
+    std::cout << "POLE DIR =" << POLE_DIR << "\n";
     std::cout << "==========================================================\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
@@ -247,8 +269,56 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 } // end
 
 
+void SphericaltoCartesian(Real &r, Real &th, Real &ph, Real &x, Real &y, Real &z){
+  // spherical polar coordinates, get local cartesian           
+  if(POLE_DIR==2){
+    x = r*sin(th)*cos(ph);
+    y = r*sin(th)*sin(ph);
+    z = r*cos(th);
+  }else if(POLE_DIR==0){
+    y = r*sin(th)*cos(ph);
+    z = r*sin(th)*sin(ph);
+    x = r*cos(th);
+  }
+}
+
+void SphericaltoCartesian_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz){
+  Real sin_th = sin(th);
+  Real cos_th = cos(th);
+  Real sin_ph = sin(ph);
+  Real cos_ph = cos(ph);
+  if(POLE_DIR==2){
+    vx = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
+    vy = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
+    vz = cos_th*vr - sin_th*vph;
+  }else if(POLE_DIR==0){
+    vy = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
+    vz = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
+    vx = cos_th*vr - sin_th*vph;
+  }
+  
+}
+void CartesiantoSpherical_VEC(Real &th, Real &ph, Real &vr, Real &vth, Real &vph, Real &vx, Real &vy, Real &vz){
+  Real sin_th = sin(th);
+  Real cos_th = cos(th);
+  Real sin_ph = sin(ph);
+  Real cos_ph = cos(ph);
+  if(POLE_DIR==2){
+    vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
+    vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
+    vph = -sin_ph*vx + cos_ph*vy;
+  }else if(POLE_DIR==0){
+    vr  = sin_th*cos_ph*vy + sin_th*sin_ph*vz + cos_th*vx;
+    vth = cos_th*cos_ph*vy + cos_th*sin_ph*vz - sin_th*vx;
+    vph = -sin_ph*vy + cos_ph*vz;
+  }
+ }
 
 
+
+
+
+  
 
 
 
@@ -274,30 +344,22 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real th = pcoord->x2v(j);
 	Real ph = pcoord->x3v(k);
 
-	Real sin_th = sin(th);
-	Real Rcyl = r*sin_th;
-
-	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
-	// current position of the secondary
-	Real x_2 = xi[0];
-	Real y_2 = xi[1];
-	Real z_2 = xi[2];
+	Real x,y,z;
+	SphericaltoCartesian(r,th,ph,x,y,z);
+	Real Rcyl = sqrt(x*x + y*y);
 	
-	// spherical polar coordinates, get local cartesian           
-	Real x = r*sin(th)*cos(ph);
-	Real y = r*sin(th)*sin(ph);
-	Real z = r*cos(th);
-
+	
+	// INITIALIZE STAR BOUNDARY AND STELLAR WIND
 	// location relative to point mass 2 (star)
 	Real d2  = sqrt(pow(x-xi[0], 2) +
 			pow(y-xi[1], 2) +
 			pow(z-xi[2], 2) );
+
 	Real R2 =  sqrt(pow(x-xi[0], 2) +
-			pow(y-xi[1], 2) );
-	Real phi2 = std::atan2(y-xi[1],x-xi[0]);
-	Real th2 = std::acos((z-xi[2])/d2);
-
-
+			pow(y-xi[1], 2) ); // in the orb plane
+	Real phi2 = std::atan2(y-xi[1],x-xi[0]); // az angle in the orbital plane
+	Real th2 = std::acos((z-xi[2])/d2); // polar angle in the orbital plane
+	
 	// surface parameters (star and planet)
 	Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	Real cs_star = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
@@ -313,10 +375,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_star;
 	  vx = vi[0] - sin(phi2)*(omega_star-Omega[2])*R2;
 	  vy = vi[1] + cos(phi2)*(omega_star-Omega[2])*R2;
-	  vz = vi[2];
-	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	  vph = -sin(ph)*vx + cos(ph)*vy;
+	  vz = vi[2];	  
 	}else if(d2<= sma/2){
 	  den = rho_surface_star * pow((d2/radius_star),-8);
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
@@ -325,28 +384,28 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vx = (x-xi[0])/d2 * cs_star + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
 	  vy = (y-xi[1])/d2 * cs_star + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
 	  vz = (z-xi[2])/d2 * cs_star + vi[2];
-	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
-	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
-	  vph = -sin(ph)*vx + cos(ph)*vy;
 	}else{
 	  den = da;
 	  pres = pa;
-	  vr = 0.0;
-	  vth = 0.0;
-	  vph = 0.0; //- Omega[2]*Rcyl;
+	  vx = 0.0;
+	  vy = 0.0;
+	  vz = 0.0; 
 	}
-	
-	// Near planet
+
 	if(initialize_planet_wind == true & r<=sma/2){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface * pow((r/r_inner),-8);
 	  pres = press_surface * pow(den / rho_surface, gamma_gas);
 	  vr = cs_planet * std::min(r/(lambda/2. * r_inner), 1.0);  
-	  vth = 0.0;
-	  vph = omega_planet*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	  Real az = std::atan2(y,x);
+	  Real polar = std::acos(z/r);
+	  vx = x/r*vr -sin(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  vy = y/r*vr +cos(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  vz = z/r*vr;   
 	}
 	
+        CartesiantoSpherical_VEC(th,ph,vr,vth,vph,vx,vy,vz); // get vr,vth,vpi
 	phydro->u(IDN,k,j,i) = std::max(den,da);
 	phydro->u(IM1,k,j,i) = den*vr;
 	phydro->u(IM2,k,j,i) = den*vth;
@@ -395,29 +454,21 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
   // Gravitational acceleration from orbital motion
   for (int k=pmb->ks; k<=pmb->ke; k++) {
     Real ph= pmb->pcoord->x3v(k);
-    Real sin_ph = sin(ph);
-    Real cos_ph = cos(ph);
     for (int j=pmb->js; j<=pmb->je; j++) {
       Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      Real cos_th = cos(th);
       for (int i=pmb->is; i<=pmb->ie; i++) {
 	Real r = pmb->pcoord->x1v(i);
 	
 	// current position of the secondary
-	Real x_2 = xi[0];
-	Real y_2 = xi[1];
-	Real z_2 = xi[2];
 	Real d12c = pow(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2], 1.5);
 	
 	// spherical polar coordinates, get local cartesian           
-	Real x = r*sin_th*cos_ph;
-	Real y = r*sin_th*sin_ph;
-	Real z = r*cos_th;
+	Real x,y,z;
+	SphericaltoCartesian(r,th,ph,x,y,z);
   
-	Real d2  = sqrt(pow(x-x_2, 2) +
-			pow(y-y_2, 2) +
-			pow(z-z_2, 2) );
+	Real d2  = sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) +
+			pow(z-xi[2], 2) );
   
 	//
 	//  COMPUTE ACCELERATIONS 
@@ -426,21 +477,21 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	Real a_r1 = -GM1*pmb->pcoord->coord_src1_i_(i)/r;
 	
 	// PM2 gravitational accels in cartesian coordinates
-	Real a_x = - GM2 * fspline(d2,rsoft2) * (x-x_2);   
-	Real a_y = - GM2 * fspline(d2,rsoft2) * (y-y_2);  
-	Real a_z = - GM2 * fspline(d2,rsoft2) * (z-z_2);
+	Real a_x = - GM2 * fspline(d2,rsoft2) * (x-xi[0]);   
+	Real a_y = - GM2 * fspline(d2,rsoft2) * (y-xi[1]);  
+	Real a_z = - GM2 * fspline(d2,rsoft2) * (z-xi[2]);
 	
 	// add the correction for the orbiting frame (relative to the COM)
-	a_x += -  GM2 / d12c * x_2;
-	a_y += -  GM2 / d12c * y_2;
-	a_z += -  GM2 / d12c * z_2;
+	a_x += -  GM2 / d12c * xi[0];
+	a_y += -  GM2 / d12c * xi[1];
+	a_z += -  GM2 / d12c * xi[2];
 	
+	Real vr  = prim(IVX,k,j,i);
+	Real vth = prim(IVY,k,j,i);
+	Real vph = prim(IVZ,k,j,i);
+
 	if(corotating_frame == 1){
-	  
-	  Real vr  = prim(IVX,k,j,i);
-	  Real vth = prim(IVY,k,j,i);
-	  Real vph = prim(IVZ,k,j,i);
-	  
+
 	  // distance from the origin in cartesian (vector)
 	  Real rxyz[3];
 	  rxyz[0] = x;
@@ -449,12 +500,9 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	  
 	  // get the cartesian velocities from the spherical (vector)
 	  Real vgas[3];
-	  vgas[0] = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
-	  vgas[1] = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
-	  vgas[2] = cos_th*vr - sin_th*vth;
-	  
+	  SphericaltoCartesian_VEC(th,ph,vr,vth,vph,vgas[0],vgas[1],vgas[2]);
+	  	  
 	  // add the centrifugal and coriolis terms
-	  
 	  // centrifugal
 	  Real Omega_x_r[3], Omega_x_Omega_x_r[3];
 	  cross(Omega,rxyz,Omega_x_r);
@@ -474,9 +522,8 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	}
 	
 	// convert back to spherical
-	Real a_r  = sin_th*cos_ph*a_x + sin_th*sin_ph*a_y + cos_th*a_z;
-	Real a_th = cos_th*cos_ph*a_x + cos_th*sin_ph*a_y - sin_th*a_z;
-	Real a_ph = -sin_ph*a_x + cos_ph*a_y;
+	Real a_r,a_th,a_ph;
+	CartesiantoSpherical_VEC(th,ph,a_r,a_th,a_ph,a_x,a_y,a_z);
 	
 	// add the PM1 accel
 	a_r += a_r1;
@@ -500,14 +547,12 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
 
-
-
 	
 	// STAR BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
 	if(d2 <= radius_star){
 	  Real R2 =  sqrt(pow(x-xi[0], 2) +
-			  pow(y-xi[1], 2) );
-	  Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+			  pow(y-xi[1], 2) ); // orb plane cyl radius
+	  Real phi2 = std::atan2(y-xi[1],x-xi[0]); // orb plane az angle
 	  
 	  Real press_surface_star = rho_surface_star*GM2/(radius_star*gamma_gas*lambda_star);
 	  Real cs = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
@@ -516,9 +561,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	  Real vz = vi[2];
 
 	  // convert back to spherical polar
-	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
-	  Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
-	  Real vph = -sin_ph*vx + cos_ph*vy;
+	  CartesiantoSpherical_VEC(th,ph,vr,vth,vph,vx,vy,vz);
 	  
 	  cons(IDN,k,j,i) = rho_surface_star;
 	  cons(IM1,k,j,i) = rho_surface_star*vr;
@@ -530,32 +573,32 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	}
 
 
+	// PLANET BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
+	if((pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) && (i==pmb->is)) {
+	  Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
+	  Real Rcyl = sqrt(x*x + y*y);
+	  Real az = std::atan2(y,x);
+	  Real polar = std::acos(z/r);
+	  Real vx = -sin(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  Real vy = cos(az)*(omega_planet*SQR(sin(polar))/Rcyl  - Omega[2]*Rcyl);
+	  Real vz = 0.0;
+	  Real vr,vth,vph;
+	  CartesiantoSpherical_VEC(th,ph,vr,vth,vph,vx,vy,vz); // get vr,vth,vpi
+	  cons(IDN,k,j,pmb->is) = rho_surface;
+	  cons(IM1,k,j,pmb->is) = rho_surface*vr;
+	  cons(IM2,k,j,pmb->is) = rho_surface*vth;
+	  cons(IM3,k,j,pmb->is) = rho_surface*vph;
+	  cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
+	  cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
+					+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
+	  
+	}
+
+	
+
       }
     }
   } // end loop over cells
-  
-
-  // PLANET BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-  if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
-    for (int k=pmb->ks; k<=pmb->ke; k++) {
-      for (int j=pmb->js; j<=pmb->je; j++) {
-        Real r = pmb->pcoord->x1v(pmb->is);
-	Real th = pmb->pcoord->x2v(j); 
-	Real Rcyl = r*sin(th);
-	Real press_surface = rho_surface*GM1/(r*gamma_gas*lambda);
-	cons(IDN,k,j,pmb->is) = rho_surface;
-        cons(IM1,k,j,pmb->is) = 0.0;
-        cons(IM2,k,j,pmb->is) = 0.0;
-        cons(IM3,k,j,pmb->is) = rho_surface*(omega_planet-Omega[2])*Rcyl;
-        cons(IEN,k,j,pmb->is) = press_surface/(gamma_gas-1.0);
-	cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
-				+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
-      }
-    }
-  } // end loop over innermost blocks
-
-
-
 }
 
 
@@ -580,6 +623,61 @@ Real mdotp(MeshBlock *pmb, int iout){
     } // end if
   
   return mdot;
+}
+
+
+
+
+
+
+int RefinementCondition(MeshBlock *pmb)
+{
+  Real mindist=1.e99;
+  Real rmin = 1.e99;
+  int inregion = 0;
+  for(int k=pmb->ks; k<=pmb->ke; k++){
+    Real ph= pmb->pcoord->x3v(k);
+    Real sin_ph = sin(ph);
+    Real cos_ph = cos(ph);
+    for(int j=pmb->js; j<=pmb->je; j++) {
+      Real th= pmb->pcoord->x2v(j);
+      Real sin_th = sin(th);
+      Real cos_th = cos(th);
+      for(int i=pmb->is; i<=pmb->ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real x = r*sin_th*cos_ph;
+	Real y = r*sin_th*sin_ph;
+	Real z = r*cos_th;
+	Real dist = std::sqrt(SQR(x-xi[0]) +
+			      SQR(y-xi[1]) +
+			      SQR(z-xi[2]) );
+	mindist = std::min(mindist,dist);
+	rmin    = std::min(rmin,r);
+      }
+    }
+  }
+
+  // derefine when away from pm & static region
+  if( (mindist > 4.0*radius_star) && rmin>x1_min_derefine  ) return -1;
+  // refine near point mass
+  if(mindist <= 3.0*radius_star) return 1;
+   // otherwise do nothing
+  return 0;
+}
+
+
+
+
+void MeshBlock::UserWorkInLoop(void) {
+  // Add timestep diagnostics
+  if(pmy_mesh->ncycle % 10 == 0){
+    if(new_block_dt == pmy_mesh->dt){
+      // call NewBlockTimeStep with extra diagnostic output
+      phydro->NewBlockTimeStep(1);
+    }
+  }
+  
+  return;
 }
 
 
