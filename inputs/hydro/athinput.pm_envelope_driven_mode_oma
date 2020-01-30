@@ -1,0 +1,134 @@
+<comment>
+problem   = spherical blast wave in spherical coordinates
+reference = Gardiner. T.A. & Stone, J.M., JCP, 205, 509 (2005) (for MHD version of test)
+configure = --prob=blast --coord=spherical_polar
+
+<job>
+problem_id = HSE      # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 20.0      # time increment between outputs
+xdmf=0
+
+<output2>
+file_type  = hst      # history
+dt         = 1.e-1      # time increment between outputs
+
+<output3>
+file_type  = rst      # history
+dt         = 1000.0     # time increment between outputs
+
+<output4>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.0      # time increment between outputs
+x2_slice   = 1.57079632679 # slice at pi/2
+xdmf=0
+
+<output5>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.0      # time increment between outputs
+x1_slice   = 1.0 # slice at r=1
+xdmf=0
+
+
+
+<time>
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1        # cycle limit
+tlim       = 10000.       # time limit
+
+<mesh>
+nx1        = 144         # Number of zones in X1-direction
+x1rat      = 1.0161187012357047   # ratio between adjacent cell sizes
+x1min      = 0.3        # minimum value of X1
+x1max      = 3.0        # maximum value of X1
+ix1_bc     = reflecting    # inner-X1 boundary flag
+ox1_bc     = user    # outer-X1 boundary flag
+
+nx2        = 192             # Number of zones in X2-direction
+x2min      = 0.0            # minimum value of X2
+x2max      = 3.141592653589793   # maximum value of X2
+ix2_bc     = polar        # inner-X2 boundary flag
+ox2_bc     = polar      # outer-X2 boundary flag
+
+nx3        = 384          # Number of zones in X3-direction
+x3min      = -3.141592653589793 # minimum value of X3
+x3max      =  3.141592653589793 # maximum value of X3
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
+
+refinement     = static
+#numlevel       = 3
+#deref_count    = 5
+
+<refinement1>
+level = 1
+x1min = 0.3
+x1max = 0.53818845712417185
+x2min = 1.3756636056624139
+x2max = 1.7659290479273793
+x3min = -3.141592653589793
+x3max = 3.141592653589793
+
+<refinement2>
+level = 1
+x1min = 0.53818845712417185
+x1max = 3
+x2min = 0.98539816339744835
+x2max = 2.1561944901923447
+x3min = -3.141592653589793
+x3max = 3.141592653589793
+
+<refinement3>
+level = 2
+x1min = 0.6
+x1max = 2.
+x2min = 1.3756636056624139
+x2max = 1.7659290479273793
+x3min = -3.141592653589793
+x3max = 3.141592653589793
+
+
+<meshblock>
+nx1        = 24        # Number of zones per MeshBlock in X1-direction
+nx2        = 24         # Number of zones per MeshBlock in X2-direction
+nx3        = 24        # Number of zones per MeshBlock in X3-direction
+
+<hydro>
+gamma           = 1.6666666666666667  # gamma = C_p/C_v
+iso_sound_speed = 1.0
+dfloor = 1.e-14
+pfloor = 1.e-14
+
+polar_average = true
+
+
+<problem>
+##GM              = 1.0
+Ggrav          = 1.0
+GM2             = 0.1
+rsoft2          = 0.05
+ecc             = 0.0 
+
+fixed_orbit = true
+omega_orb_fixed = 0.39449901599696185   # omega_(l=8) / 8
+
+pamb          = 1.0e-20           # ambient pressure
+damb          = 1.0e-20
+
+trelax        = 4.0   # relax (damping) for this time
+t_mass_on     = 1.0   # then turn on the secondary linearly over this time, NB: ignored in corotating frame
+
+fcorotation   = 0.0  # 1=corotating envelope, 0=irrotational (real, range 0-1)
+
+output_accel  = 0    # flag to output accelerations
+corotating_frame = 0 # flag whether to do simulation in frame that rotates around COM at initial orbital frequency
+
+gas_backreaction = 0 # flag to include gas effect on orbit
+n_particle_substeps = 1 # how many particle integration substeps per timestep?
+
+trackfile_dt = 1.e-2

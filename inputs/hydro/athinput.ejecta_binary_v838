@@ -1,0 +1,94 @@
+<job>
+problem_id = BIN_EJECTA     # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.e7      # time increment between outputs
+xdmf = 0
+x2_slice = 1.5707963267948966
+
+<output2>
+file_type  = hst      # history
+dt         = 1.e7   # time increment between outputs
+
+<output3>
+file_type  = rst      # restart
+dt         = 1.0e11     # time increment between outputs
+
+
+<time>
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1     # cycle limit
+tlim       = 3.0e8       # time limit
+
+<mesh>
+nx1        = 96       # Number of zones in X1-direction
+x1rat      = 1.02189714865402       # ratio between adjacent cell sizes
+x1min      = 1.e15        # minimum value of X1
+x1max      = 8.e15       # maximum value of X1
+ix1_bc     = outflow   # inner-X1 boundary flag
+ox1_bc     = user    # outer-X1 boundary flag
+
+nx2        = 4             # Number of zones in X2-direction
+x2min      = 1.55 #1.3744467859455345            # minimum value of X2
+x2max      = 1.59 #1.7671458676442586   # maximum value of X2
+ix2_bc     = outflow        # inner-X2 boundary flag
+ox2_bc     = outflow        # outer-X2 boundary flag
+
+nx3        = 512        # Number of zones in X3-direction
+x3min      = -3.141592653589793 # minimum value of X3
+x3max      =  3.141592653589793 # maximum value of X3
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
+
+
+refinement     = active
+numlevel       = 2
+deref_count    = 5
+
+
+<meshblock>
+nx1        = 16       # Number of zones per MeshBlock in X1-direction
+nx2        = 4         # Number of zones per MeshBlock in X2-direction
+nx3        = 16         # Number of zones per MeshBlock in X3-direction
+
+<hydro>
+gamma           = 1.1 #1.6666666666666667  # gamma = C_p/C_v
+iso_sound_speed = 1.0
+dfloor = 1.e-30
+pfloor = 1.e-20
+
+
+<problem>
+Ggrav           = 6.674e-8
+
+## orbit 
+sma             = 3.74e+15
+ecc             = 0.0
+M1              = 1.591e+34
+M2              = 1.591e+34 
+rsoft2          = 1.e14
+
+### ejecta
+m_ejecta        = 2.e33
+vinf_min_ejecta = 1.e5 # must be >0
+vinf_max_ejecta = 5e7
+dlogmdlogv_ejecta = -4
+r_max_ejecta = 2.e15
+
+
+### numerical
+corotating_frame = 0 # flag whether to do simulation in frame that rotates around COM at initial orbital frequency
+gas_backreaction = 0 # flag to include gas effect on orbit
+n_particle_substeps = 1 # how many particle integration substeps per timestep?
+
+## ambient "background"
+damb = 1.e-24
+pamb = 1.e-18
+
+
+### trackfile output 
+trackfile_dt = 1.e7  # dt for printing particle properties
+
+

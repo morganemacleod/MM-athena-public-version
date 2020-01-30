@@ -1,0 +1,118 @@
+<comment>
+
+<job>
+problem_id = BINWIND      # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 0.1      # time increment between outputs
+x3_slice    = 0.0
+xdmf = 0
+
+<output2>
+file_type  = hst      # history
+dt         = 0.1     # time increment between outputs
+
+<output3>
+file_type = rst
+dt = 100
+
+<time>
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1       # cycle limit
+tlim       = 60.0       # time limit
+
+<mesh>
+nx1        = 128        # Number of zones in X1-direction
+x1min      = -48        # minimum value of X1
+x1max      = 48        # maximum value of X1
+ix1_bc     = outflow    # inner-X1 boundary flag
+ox1_bc     = outflow  # outer-X1 boundary flag
+
+nx2        = 128            # Number of zones in X2-direction
+x2min      = -48            # minimum value of X2
+x2max      = 48             # maximum value of X2
+ix2_bc     = outflow        # inner-X2 boundary flag
+ox2_bc     = outflow      # outer-X2 boundary flag
+
+nx3        = 128          # Number of zones in X3-direction
+x3min      = -48         # minimum value of X3
+x3max      =  48          # maximum value of X3
+ix3_bc     = outflow        # inner-X3 boundary flag
+ox3_bc     = outflow       # outer-X3 boundary flag
+
+refinement     = static
+#numlevel       = 3
+#deref_count    = 5
+
+<refinement1>
+level = 1
+x1min = -24
+x1max = 24
+x2min = -24
+x2max = 24
+x3min = -24
+x3max = 24
+
+<refinement1>
+level = 2
+x1min = -12
+x1max = 12
+x2min = -12
+x2max = 12
+x3min = -12
+x3max = 12
+
+<refinement1>
+level = 3
+x1min = -6
+x1max = 6
+x2min = -6
+x2max = 6
+x3min = -6
+x3max = 6
+
+<refinement1>
+level = 4
+x1min = -3
+x1max = 3
+x2min = -3
+x2max = 3
+x3min = -3
+x3max = 3
+
+<refinement1>
+level = 5
+x1min = -1.5
+x1max = 1.5
+x2min = -1.5
+x2max = 1.5
+x3min = -1.5
+x3max = 1.5
+
+
+
+<meshblock>
+nx1        =8        # Number of zones per MeshBlock in X1-direction
+nx2        = 8         # Number of zones per MeshBlock in X2-direction
+nx3        = 8         # Number of zones per MeshBlock in X3-direction
+
+<hydro>
+gamma           = 1.01  # gamma = C_p/C_v
+iso_sound_speed = 1.0
+dfloor = 1.e-20
+pfloor = 1.e-20
+
+<problem>
+Ggrav          = 1.0
+GM1 = 0.5
+GM2 = 0.5
+sma = 1.0
+rsoft = 0.1
+
+rho_surface = 1.0
+lambda = 5
+
+phi_critical_o_phi_L1 = 2.0
+
