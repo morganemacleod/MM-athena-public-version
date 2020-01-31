@@ -122,7 +122,7 @@ void Hydro::NewBlockTimeStep(int diagnostic_output) {
         Real& dt_1 = dt1(i);
         min_dt_hyperbolic = std::min(min_dt_hyperbolic, dt_1);
         // MM:
-        if(diagnostic_output==1 && dt_1==min_dt){
+        if(diagnostic_output==1 && dt_1==min_dt_hyperbolic){
           i_min = i;
           j_min = j;
           k_min = k;
@@ -138,7 +138,7 @@ void Hydro::NewBlockTimeStep(int diagnostic_output) {
           Real& dt_2 = dt2(i);
           min_dt_hyperbolic = std::min(min_dt_hyperbolic, dt_2);
           // MM:
-          if(diagnostic_output==1 && dt_2==min_dt){
+          if(diagnostic_output==1 && dt_2==min_dt_hyperbolic){
             i_min = i;
             j_min = j;
             k_min = k;
@@ -155,7 +155,7 @@ void Hydro::NewBlockTimeStep(int diagnostic_output) {
           Real& dt_3 = dt3(i);
           min_dt_hyperbolic = std::min(min_dt_hyperbolic, dt_3);
           // MM:
-          if(diagnostic_output==1 && dt_3==min_dt){
+          if(diagnostic_output==1 && dt_3==min_dt_hyperbolic){
             i_min = i;
             j_min = j;
             k_min = k;
