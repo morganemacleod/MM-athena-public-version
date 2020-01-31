@@ -36,6 +36,7 @@
 #include "../bvals/bvals.hpp"
 #include "../utils/utils.hpp"
 #include "../outputs/outputs.hpp"
+#include "../scalars/scalars.hpp"
 
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
@@ -126,8 +127,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
    
   r_inner = pin->GetReal("mesh","x1min");
   x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
-
-  //initialize_planet_wind = pin->GetBoolean("problem","initialize_planet_wind"); 
 
 
 
@@ -318,6 +317,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vx,vy,vz;
 	Real vr,vth,vph;
 
+	Real scalar_val=0.0;
+
 	// Near Planet
 	if(d2 <= radius_planet){
 	  den = rho_surface_planet;
@@ -357,6 +358,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vth = 0.0;
 	  vph = omega_star*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
 	}
+
+	
 	
 	phydro->u(IDN,k,j,i) = std::max(den,da);
 	phydro->u(IM1,k,j,i) = den*vr;
@@ -365,6 +368,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) = std::max(pres,pa)/(gamma_gas-1.0);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+
+	pscalars->s(0,k,j,i) = scalar_val*phydro->u(IDN,k,j,i);
 
       }
     }
@@ -538,6 +543,8 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	  cons(IEN,k,j,i) = press_surface_planet/(gamma_gas-1.0);
 	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
 				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
+	  
+	  pmb->pscalars->r(0,k,j,i) = 1.0; // set scalar concetration to one
 	}
 
 
