@@ -4,7 +4,7 @@ problem_id = PLANET_WIND_LAMBDA_2d_W107     # problem ID: basename of output fil
 <output1>
 file_type  = hdf5        # Binary data dump
 variable   = prim       # variables to be output
-dt         = 1.e4      # time increment between outputs
+dt         = 1.e3      # time increment between outputs
 xdmf = 0
 #x2_slice = 1.5707963267948966
 
@@ -12,9 +12,9 @@ xdmf = 0
 file_type  = hst      # history
 dt         = 1.e3   # time increment between outputs
 
-<output3>
-file_type  = rst      # restart
-dt         = 1.0e11     # time increment between outputs
+#<output3>
+#file_type  = rst      # restart
+#dt         = 1.0e11     # time increment between outputs
 
 
 <time>
@@ -23,9 +23,9 @@ nlim       = -1      # cycle limit
 tlim       = 1.0e6       # time limit
 
 <mesh>
-nx1        = 192        # Number of zones in X1-direction
-x1rat      = 1.0326348421751386        # ratio between adjacent cell sizes
-x1min      = 6.72e9        # minimum value of X1
+nx1        = 112        # Number of zones in X1-direction
+x1rat      = 1.0341216628326853        # ratio between adjacent cell sizes
+x1min      = 7.e10        # minimum value of X1
 x1max      = 3.2e12       # maximum value of X1
 ix1_bc     = reflecting   # inner-X1 boundary flag
 ox1_bc     = user    # outer-X1 boundary flag
@@ -43,21 +43,18 @@ ix3_bc     = periodic        # inner-X3 boundary flag
 ox3_bc     = periodic        # outer-X3 boundary flag
 
 
-
 refinement     = adaptive
-numlevel       = 3
+numlevel       = 6
 deref_count    = 5
 
-
-#<refinement1>
-#level = 1
-#x1min = 6.72e9
-#x1max = 3.e10
-#x2min = 1.3744467859455345 
-#x2max = 1.7671458676442586
-#x3min = -3.141592653589793
-#x3max = 3.141592653589793
-
+<refinement3>
+level = 3
+x1min = 7.5e11
+x1max = 8.9e11
+x2min = 1.3744467859455345 
+x2max = 1.7671458676442586
+x3min = -0.25
+x3max = 0.25
 
 
 
@@ -68,7 +65,7 @@ nx2        = 4         # Number of zones per MeshBlock in X2-direction
 nx3        = 16         # Number of zones per MeshBlock in X3-direction
 
 <hydro>
-gamma           = 1.1 #1.6666666666666667  # gamma = C_p/C_v
+gamma           = 1.01 #1.6666666666666667  # gamma = C_p/C_v
 iso_sound_speed = 1.0
 dfloor = 1.e-30
 pfloor = 1.e-20
@@ -82,18 +79,17 @@ sma             = 8.228e11
 ecc             = 0.0
 
 ### planet
-M1              = 2.259e29
-rho_surface = 1.e-11
-lambda = 5.0
+M2              = 2.259e29
+rho_surface_planet = 1.e-15 
+lambda_planet = 5.0
 f_corotation_planet = 1.0
-initialize_planet_wind = true
+radius_planet = 6.72e9  
+rsoft2      =   3.3e9
 
 ### star
-M2              = 1.3724e33
+M1              = 1.3724e33
 rho_surface_star = 2.0e-18
 lambda_star = 5.0
-radius_star = 4.592e10
-rsoft2      = 2.1e10
 f_corotation_star = 1.0
 
 ### numerical
@@ -109,8 +105,4 @@ pamb = 1.e-13
 ### trackfile output 
 trackfile_dt = 1.e3  # dt for printing particle properties
 
-
-
-### AMR
-x1_min_derefine = 0.0 # never derefine inside this radius (useful if combining SMR and AMR)
 
