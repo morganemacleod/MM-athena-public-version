@@ -146,8 +146,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   ruser_mesh_data[3].NewAthenaArray(2);
 
   // enroll the BCs
-  if(mesh_bcs[OUTER_X1] == GetBoundaryFlag("user")) {
-    EnrollUserBoundaryFunction(OUTER_X1, DiodeOuterX1);
+  if(mesh_bcs[BoundaryFace::outer_x1] == GetBoundaryFlag("user")) {
+    EnrollUserBoundaryFunction(BoundaryFace::outer_x1, DiodeOuterX1);
   }
 
 
@@ -547,7 +547,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
   
 
   // STAR BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-  if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
+  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
     for (int k=pmb->ks; k<=pmb->ke; k++) {
       for (int j=pmb->js; j<=pmb->je; j++) {
         Real r = pmb->pcoord->x1v(pmb->is);
@@ -576,7 +576,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 Real mdotstar(MeshBlock *pmb, int iout){
   Real mdot = 0.0;
   
-  if(pmb->pbval->block_bcs[INNER_X1] == REFLECTING_BNDRY) {
+  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
      int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
      AthenaArray<Real> area;
      int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
@@ -637,51 +637,11 @@ int RefinementCondition(MeshBlock *pmb)
 void MeshBlock::UserWorkInLoop(void) {
   // Add timestep diagnostics
   if(pmy_mesh->ncycle % 10 == 0){
-    if(new_block_dt == pmy_mesh->dt){
+    if(new_block_dt_ == pmy_mesh->dt){
       // call NewBlockTimeStep with extra diagnostic output
       phydro->NewBlockTimeStep(1);
     }
-  }
-
-
-  // // Add floor diagnostics
-  // Real dfloor = peos->GetDensityFloor();
-  // Real pfloor = peos->GetPressureFloor();
-  //  for (int k=ks; k<=ke; k++) {
-  //   for (int j=js; j<=je; j++) {
-  //     for (int i=is; i<=ie; i++) {
-  // 	Real den = phydro->u(IDN,k,j,i);
-  // 	Real Eth = phydro->u(IEN,k,j,i) -
-  // 	  ( 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)) + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i));
-  // 	Real press = Eth*(gamma_gas -1.);
-
-  // 	if (den == dfloor || press==pfloor){
-  // 	  std::cout << "reseting floored var \n";
-  // 	  phydro->u(IDN,k+1,j,i)  = (phydro->u(IDN,k+1,j,i) + phydro->u(IDN,k-1,j,i) +
-  // 				     phydro->u(IDN,k,j+1,i) + phydro->u(IDN,k,j-1,i) +
-  // 				     phydro->u(IDN,k,j,i+1) + phydro->u(IDN,k,j,i-1) )/ 6.;
-
-  // 	  phydro->u(IM1,k+1,j,i)  = (phydro->u(IM1,k+1,j,i) + phydro->u(IM1,k-1,j,i) +
-  // 				     phydro->u(IM1,k,j+1,i) + phydro->u(IM1,k,j-1,i) +
-  // 				     phydro->u(IM1,k,j,i+1) + phydro->u(IM1,k,j,i-1) )/ 6.;
-	  
-  // 	  phydro->u(IM2,k+1,j,i)  = (phydro->u(IM2,k+1,j,i) + phydro->u(IM2,k-1,j,i) +
-  // 				     phydro->u(IM2,k,j+1,i) + phydro->u(IM2,k,j-1,i) +
-  // 				     phydro->u(IM2,k,j,i+1) + phydro->u(IM2,k,j,i-1) )/ 6.;
-
-  // 	  phydro->u(IM3,k+1,j,i)  = (phydro->u(IM3,k+1,j,i) + phydro->u(IM3,k-1,j,i) +
-  // 				     phydro->u(IM3,k,j+1,i) + phydro->u(IM3,k,j-1,i) +
-  // 				     phydro->u(IM3,k,j,i+1) + phydro->u(IM3,k,j,i-1) )/ 6.;
-	  
-  // 	  phydro->u(IEN,k+1,j,i)  = (phydro->u(IEN,k+1,j,i) + phydro->u(IEN,k-1,j,i) +
-  // 				     phydro->u(IEN,k,j+1,i) + phydro->u(IEN,k,j-1,i) +
-  // 				     phydro->u(IEN,k,j,i+1) + phydro->u(IEN,k,j,i-1) )/ 6.;
-  // 	}
-	
-  //     }
-  //   }
-  //  }
-  
+  }  
   return;
 }
 
