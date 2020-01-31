@@ -39,7 +39,7 @@
 // \brief calculate the minimum timestep within a MeshBlock
 
 
-void Hydro::NewBlockTimeStep() {
+void Hydro::NewBlockTimeStep(int diagnostic_output) {
   MeshBlock *pmb = pmy_block;
   int is = pmb->is; int js = pmb->js; int ks = pmb->ks;
   int ie = pmb->ie; int je = pmb->je; int ke = pmb->ke;

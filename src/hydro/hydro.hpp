@@ -59,7 +59,7 @@ class Hydro {
   HydroDiffusion hdif;
 
   // functions
-  void NewBlockTimeStep();    // computes new timestep on a MeshBlock
+  void NewBlockTimeStep(int diagnostic_output=0);    // computes new timestep on a MeshBlock
   void AddFluxDivergence(const Real wght, AthenaArray<Real> &u_out);
   void CalculateFluxes(AthenaArray<Real> &w, FaceField &b,
                        AthenaArray<Real> &bcc, const int order);
