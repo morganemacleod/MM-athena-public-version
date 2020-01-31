@@ -14,7 +14,7 @@ dt         = 1.e3   # time increment between outputs
 
 <output3>
 file_type  = rst      # restart
-dt         = 1.0e4     # time increment between outputs
+dt         = 1.0e11     # time increment between outputs
 
 
 <time>
@@ -31,8 +31,8 @@ ix1_bc     = reflecting   # inner-X1 boundary flag
 ox1_bc     = user    # outer-X1 boundary flag
 
 nx2        = 4             # Number of zones in X2-direction
-x2min      = 1.54 #1.3744467859455345            # minimum value of X2
-x2max      = 1.60 #1.7671458676442586   # maximum value of X2
+x2min      = 1.3744467859455345            # minimum value of X2
+x2max      = 1.7671458676442586   # maximum value of X2
 ix2_bc     = outflow        # inner-X2 boundary flag
 ox2_bc     = outflow        # outer-X2 boundary flag
 
@@ -43,9 +43,11 @@ ix3_bc     = periodic        # inner-X3 boundary flag
 ox3_bc     = periodic        # outer-X3 boundary flag
 
 
+
 refinement     = adaptive
 numlevel       = 3
 deref_count    = 5
+
 
 #<refinement1>
 #level = 1
@@ -55,6 +57,7 @@ deref_count    = 5
 #x2max = 1.7671458676442586
 #x3min = -3.141592653589793
 #x3max = 3.141592653589793
+
 
 
 
@@ -107,5 +110,7 @@ pamb = 1.e-13
 trackfile_dt = 1.e3  # dt for printing particle properties
 
 
+
 ### AMR
 x1_min_derefine = 0.0 # never derefine inside this radius (useful if combining SMR and AMR)
+

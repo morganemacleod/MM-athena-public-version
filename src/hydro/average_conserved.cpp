@@ -36,8 +36,8 @@ void Hydro::PhiAverageConserved(AthenaArray<Real> &u_in,AthenaArray<Real> &u_out
   if(do_average_ == false) return;
   // check if we're on the x2-boundary
   MeshBlock *pmb=pmy_block;
-  if((pmb->pbval->block_bcs[INNER_X2] == BLOCK_BNDRY) &&
-     (pmb->pbval->block_bcs[OUTER_X2] == BLOCK_BNDRY)) {
+  if((pmb->pbval->block_bcs[BoundaryFace::inner_x2] == BoundaryFlag::block) &&
+     (pmb->pbval->block_bcs[BoundaryFace::outer_x2] == BoundaryFlag::block)) {
     return;
   }
 
@@ -140,7 +140,7 @@ void Hydro::Get_block_N_zone_avg(MeshBlock *pmb){
   
   
   //check if we're on the inner x2-boundary
-  if(pmb->pbval->block_bcs[INNER_X2] == POLAR_BNDRY) {
+  if(pmb->pbval->block_bcs[BoundaryFace::inner_x2] == BoundaryFlag::polar) {
     for (int j=js; j<=je; ++j) {
       //int n_avg_temp = pmb->block_size.nx3/pow(2,(j-js));
       int n_avg_temp = round(pmb->block_size.nx3/pow(2,round(log2(j-js+1))));
@@ -151,7 +151,7 @@ void Hydro::Get_block_N_zone_avg(MeshBlock *pmb){
       }
     }
   }
-  if (pmb->pbval->block_bcs[OUTER_X2] == POLAR_BNDRY)  {
+  if (pmb->pbval->block_bcs[BoundaryFace::outer_x2] == BoundaryFlag::polar)  {
     // average the je index
     for (int j=js; j<=je; ++j) {
       //int n_avg_temp = pmb->block_size.nx3/pow(2,(je-j));
