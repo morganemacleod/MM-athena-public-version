@@ -317,7 +317,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vx,vy,vz;
 	Real vr,vth,vph;
 
-	Real scalar_val=0.0;
+	Real scalar_val=1.e-10;
 
 	// Near Planet
 	if(d2 <= radius_planet){
@@ -544,7 +544,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
 				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
 	  
-	  pmb->pscalars->r(0,k,j,i) = 1.0; // set scalar concetration to one
+	  pmb->pscalars->s(0,k,j,i) = 1.0*rho_surface_planet; // set scalar concetration to one
 	}
 
 
