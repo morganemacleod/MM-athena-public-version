@@ -90,6 +90,8 @@ Real omega_planet, omega_star; // rotation of planet and star boundaries
 Real da,pa;
 
 Real x1_min_derefine; // for AMR
+Real threshold, dscale; // for AMR
+int max_level;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -127,7 +129,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
    
   r_inner = pin->GetReal("mesh","x1min");
   x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
-
+  threshold = pin->GetOrAddReal("problem","ref_grad_thr",0.1);
+  dscale = pin->GetOrAddReal("problem","ref_dscale",1.e10);
+  max_level = pin->GetOrAddInteger("mesh", "numlevel", 1);
 
 
   // local vars
@@ -607,17 +611,28 @@ Real mdotstar(MeshBlock *pmb, int iout){
 
 int RefinementCondition(MeshBlock *pmb)
 {
+
+  int current_level = pmb->loc.level;
+    
+  int refine = 0;
   Real mindist=1.e99;
   Real rmin = 1.e99;
+
+  AthenaArray<Real> &w = pmb->phydro->w;
+  Real maxeps = 0.0;
+
+  Real maxscalar;
+
   for(int k=pmb->ks; k<=pmb->ke; k++){
     Real ph= pmb->pcoord->x3v(k);
     Real sin_ph = sin(ph);
     Real cos_ph = cos(ph);
-    for(int j=pmb->js; j<=pmb->je; j++) {
+    for(int j=pmb->js; j<=pmb->je+1; j++) {
       Real th= pmb->pcoord->x2v(j);
       Real sin_th = sin(th);
       Real cos_th = cos(th);
       for(int i=pmb->is; i<=pmb->ie; i++) {
+	// distance from the planet
 	Real r = pmb->pcoord->x1v(i);
 	Real x = r*sin_th*cos_ph;
 	Real y = r*sin_th*sin_ph;
@@ -628,14 +643,49 @@ int RefinementCondition(MeshBlock *pmb)
 	mindist = std::min(mindist,dist);
 	rmin    = std::min(rmin,r);
 
+	// pressure gradients
+	Real eps = std::sqrt(SQR(0.5*(w(IPR,k,j,i+1) - w(IPR,k,j,i-1)))
+			     +SQR(0.5*(w(IPR,k,j+1,i) - w(IPR,k,j-1,i)))
+			     +SQR(0.5*(w(IPR,k+1,j,i) - w(IPR,k-1,j,i))))/w(IPR,k,j,i);
+	maxeps = std::max(maxeps, eps);
+
+	// scalar concentration
+	Real scalar_r = pmb->pscalars->r(0,k,j,i);
+	maxscalar = std::max(maxscalar,scalar_r);
+
+
       }
     }
   }
 
-  if(mindist <= 3.0*radius_planet) return 1;
-  else if(mindist > 4.0*radius_planet) return -1;
-  else return 0;
+  int lrefinemax = max_level - floor(log2(mindist/dscale));
+  
+  // based on distance from the planet
+  if(mindist <= 6.0*radius_planet){
+    refine = 1;
+  } else if(mindist > 6.0*radius_planet) {
+    // based on threshold of pw scalar
+    if(maxscalar>0.01){
+      if (maxeps > threshold && current_level < lrefinemax){
+	refine = 1;
+      } else if (maxeps < 0.25*threshold){
+	refine = -1;
+      } else {
+	refine = 0;
+      }
+    }else{
+      refine = -1;
+    }    
+  }
 
+  // Override AMR on the polar boundaries (because we turned off a safety check
+  if(pmb->pbval->block_bcs[BoundaryFace::inner_x2] == BoundaryFlag::polar ||
+     pmb->pbval->block_bcs[BoundaryFace::outer_x2] == BoundaryFlag::polar) {
+    refine = 0;
+  }
+  
+
+  return refine;
 }
 
 
