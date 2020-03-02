@@ -242,7 +242,7 @@ class Mesh {
   AthenaArray<int> *iuser_mesh_data;
 
   bool user_force_output; //MM: make a flag to force output 
-
+  int root_level, max_level, current_level; // MM: make these public
   
   // functions
   void Initialize(int res_flag, ParameterInput *pin);
@@ -267,7 +267,7 @@ class Mesh {
 
   // data
   int next_phys_id_; // next unused value for encoding final component of MPI tag bitfield
-  int root_level, max_level, current_level;
+  
   int num_mesh_threads_;
   int *nslist, *ranklist, *nblist;
   double *costlist;

@@ -300,6 +300,7 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
       ATHENA_ERROR(msg);
     }
 
+    
     InputBlock *pib = pin->pfirst_block;
     while (pib != nullptr) {
       if (pib->block_name.compare(0, 10, "refinement") == 0) {
@@ -322,7 +323,7 @@ Mesh::Mesh(ParameterInput *pin, int mesh_test) :
         }
         int ref_lev = pin->GetInteger(pib->block_name, "level");
         int lrlev = ref_lev + root_level;
-        if (lrlev > current_level) current_level = lrlev;
+	if (lrlev > current_level) current_level = lrlev;
         // range check
         if (ref_lev < 1) {
           msg << "### FATAL ERROR in Mesh constructor" << std::endl
