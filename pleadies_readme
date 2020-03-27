@@ -18,4 +18,8 @@ python configure.py --prob polytrope --eos adiabatic --coord cartesian --flux hl
 
 
 LAPTOP planet_wind config:
-python configure.py --prob planet_wind_lambda --coord spherical_polar --flux hllc -mpi -hdf5 --hdf5_path /opt/local --cxx g++ 
+python configure.py --prob planet_wind_lambda --coord spherical_polar --flux hllc -mpi -hdf5 --hdf5_path /opt/local --cxx g++
+
+
+LAPTOP planet_wind_lambda_star_origin:
+python configure.py --prob planet_wind_lambda_star_origin --coord spherical_polar --flux hllc -mpi -hdf5 --hdf5_path /opt/local --cxx g++ --nscalars=1

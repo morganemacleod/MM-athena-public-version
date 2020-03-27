@@ -36,6 +36,7 @@
 #include "../bvals/bvals.hpp"
 #include "../utils/utils.hpp"
 #include "../outputs/outputs.hpp"
+#include "../scalars/scalars.hpp"
 
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
@@ -58,7 +59,7 @@ Real mdotstar(MeshBlock *pmb, int iout);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
-int RefinementCondition(MeshBlock *pmb);
+//int RefinementCondition(MeshBlock *pmb);
 
 
 // global (to this file) problem parameters
@@ -88,7 +89,8 @@ Real omega_planet, omega_star; // rotation of planet and star boundaries
 //bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
 Real da,pa;
 
-Real x1_min_derefine; // for AMR
+//Real x1_min_derefine; // for AMR
+//Real threshold, dscale; // for AMR
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -125,11 +127,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   radius_planet = pin->GetOrAddReal("problem","radius_planet",6.955e10);
    
   r_inner = pin->GetReal("mesh","x1min");
-  x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
-
-  //initialize_planet_wind = pin->GetBoolean("problem","initialize_planet_wind"); 
-
-
+  //x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
+  //threshold = pin->GetOrAddReal("problem","ref_grad_thr",0.1);
+  //dscale = pin->GetOrAddReal("problem","ref_dscale",1.e10);
+  
 
   // local vars
   Real sma = pin->GetOrAddReal("problem","sma",1.5e12);
@@ -159,8 +160,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   EnrollUserHistoryOutput(0, mdotstar, "mdotstar");
 
    // Enroll AMR
-  if(adaptive==true)
-    EnrollUserRefinementCondition(RefinementCondition);
+  //if(adaptive==true)
+  //  EnrollUserRefinementCondition(RefinementCondition);
 
   // always write at startup
   trackfile_next_time = time;
@@ -318,6 +319,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vx,vy,vz;
 	Real vr,vth,vph;
 
+	Real scalar_val=1.e-10;
+
 	// Near Planet
 	if(d2 <= radius_planet){
 	  den = rho_surface_planet;
@@ -357,6 +360,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vth = 0.0;
 	  vph = omega_star*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
 	}
+
+	
 	
 	phydro->u(IDN,k,j,i) = std::max(den,da);
 	phydro->u(IM1,k,j,i) = den*vr;
@@ -365,6 +370,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) = std::max(pres,pa)/(gamma_gas-1.0);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+
+	pscalars->s(0,k,j,i) = scalar_val*phydro->u(IDN,k,j,i);
 
       }
     }
@@ -538,6 +545,8 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	  cons(IEN,k,j,i) = press_surface_planet/(gamma_gas-1.0);
 	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
 				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
+	  
+	  pmb->pscalars->s(0,k,j,i) = 1.0*rho_surface_planet; // set scalar concetration to one
 	}
 
 
@@ -595,41 +604,86 @@ Real mdotstar(MeshBlock *pmb, int iout){
 
 
 
+// int RefinementCondition(MeshBlock *pmb)
+// {
+
+//   int mylevel = pmb->loc.level;
+      
+//   int refine = 0;
+//   Real mindist=1.e99;
+//   Real rmin = 1.e99;
+
+//   AthenaArray<Real> &w = pmb->phydro->w;
+//   Real maxeps = 0.0;
+
+//   Real maxscalar;
+
+//   for(int k=pmb->ks; k<=pmb->ke; k++){
+//     Real ph= pmb->pcoord->x3v(k);
+//     Real sin_ph = sin(ph);
+//     Real cos_ph = cos(ph);
+//     for(int j=pmb->js; j<=pmb->je+1; j++) {
+//       Real th= pmb->pcoord->x2v(j);
+//       Real sin_th = sin(th);
+//       Real cos_th = cos(th);
+//       for(int i=pmb->is; i<=pmb->ie; i++) {
+// 	// distance from the planet
+// 	Real r = pmb->pcoord->x1v(i);
+// 	Real x = r*sin_th*cos_ph;
+// 	Real y = r*sin_th*sin_ph;
+// 	Real z = r*cos_th;
+// 	Real dist = std::sqrt(SQR(x-xi[0]) +
+// 			      SQR(y-xi[1]) +
+// 			      SQR(z-xi[2]) );
+// 	mindist = std::min(mindist,dist);
+// 	rmin    = std::min(rmin,r);
+
+// 	// pressure gradients
+// 	Real eps = std::sqrt(SQR(0.5*(w(IPR,k,j,i+1) - w(IPR,k,j,i-1)))
+// 			     +SQR(0.5*(w(IPR,k,j+1,i) - w(IPR,k,j-1,i)))
+// 			     +SQR(0.5*(w(IPR,k+1,j,i) - w(IPR,k-1,j,i))))/w(IPR,k,j,i);
+// 	maxeps = std::max(maxeps, eps);
+
+// 	// scalar concentration
+// 	Real scalar_r = pmb->pscalars->r(0,k,j,i);
+// 	maxscalar = std::max(maxscalar,scalar_r);
 
 
+//       }
+//     }
+//   }
 
-int RefinementCondition(MeshBlock *pmb)
-{
-  Real mindist=1.e99;
-  Real rmin = 1.e99;
-  for(int k=pmb->ks; k<=pmb->ke; k++){
-    Real ph= pmb->pcoord->x3v(k);
-    Real sin_ph = sin(ph);
-    Real cos_ph = cos(ph);
-    for(int j=pmb->js; j<=pmb->je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      Real cos_th = cos(th);
-      for(int i=pmb->is; i<=pmb->ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real x = r*sin_th*cos_ph;
-	Real y = r*sin_th*sin_ph;
-	Real z = r*cos_th;
-	Real dist = std::sqrt(SQR(x-xi[0]) +
-			      SQR(y-xi[1]) +
-			      SQR(z-xi[2]) );
-	mindist = std::min(mindist,dist);
-	rmin    = std::min(rmin,r);
+//   int lrefinemax = pmb->pmy_mesh->max_level; //- floor( std::max(0.0,log2(mindist/dscale)) );
+  
+  
+//   // based on distance from the planet
+//   if(mindist <= 6.0*radius_planet){
+//     refine = 1;
+//   } else if(mindist > 6.0*radius_planet) {
+//     // based on threshold of pw scalar
+//     if(maxscalar>0.01){
+//       if ( (maxeps > threshold) && (mylevel < lrefinemax) ){
+// 	refine = 1;
+//       } else if (maxeps < 0.25*threshold){
+// 	refine = -1;
+//       } else {
+// 	refine = 0;
+//       }
+//     }else{
+//       refine = -1;
+//     }    
+//   }
 
-      }
-    }
-  }
+//   // Override AMR on the polar boundaries (because we turned off a safety check
+//   if(pmb->pbval->block_bcs[BoundaryFace::inner_x2] == BoundaryFlag::polar ||
+//      pmb->pbval->block_bcs[BoundaryFace::outer_x2] == BoundaryFlag::polar) {
+//     refine = 0;
+//   }
+  
 
-  if(mindist <= 3.0*radius_planet) return 1;
-  else if(mindist > 4.0*radius_planet) return -1;
-  else return 0;
-
-}
+//   return refine;
+//   //return 0;
+// }
 
 
 
