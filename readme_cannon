@@ -1,0 +1,1 @@
+python configure_tacc.py --prob pm_envelope --coord spherical_polar -mpi --mpiccmd mpiicpc --cxx icc -hdf5 --hdf5_path /n/sw/eb/apps/centos7/HDF5/1.10.2-intel-2019b --cflag="$VECFLAG"
