@@ -178,12 +178,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     omega_planet = f_corot_planet * Omega_orb;
     
     // set the initial conditions for the pos/vel of the secondary
-    xi[0] = sma*(1.0 + ecc);  // apocenter
+    xi[0] = -sma*(1.0 + ecc);  // apocenter
     xi[1] = 0.0;
     xi[2] = 0.0;
     
     vi[0] = 0.0;
-    vi[1]= sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
+    vi[1]= -sqrt( vcirc*vcirc*(1.0 - ecc)/(1.0 + ecc) ); //v_apocenter
     vi[2] = 0.0;
     
     // now set the initial condition for Omega
@@ -688,16 +688,16 @@ Real mdotstar(MeshBlock *pmb, int iout){
 
 
 
-void MeshBlock::UserWorkInLoop(void) {
-  // Add timestep diagnostics
-  if(pmy_mesh->ncycle % 10 == 0){
-    if(new_block_dt_ == pmy_mesh->dt){
-      // call NewBlockTimeStep with extra diagnostic output
-      phydro->NewBlockTimeStep(1);
-    }
-  }  
-  return;
-}
+//void MeshBlock::UserWorkInLoop(void) {
+//  // Add timestep diagnostics
+//  if(pmy_mesh->ncycle % 10 == 0){
+//    if(new_block_dt_ == pmy_mesh->dt){
+//      // call NewBlockTimeStep with extra diagnostic output
+//      phydro->NewBlockTimeStep(1);
+//    }
+//  }  
+//  return;
+//}
 
 
 

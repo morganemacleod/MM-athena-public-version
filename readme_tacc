@@ -1,2 +1,2 @@
- python configure_tacc.py --prob planet_wind_lambda_star_origin --coord spherical_polar -mpi -hdf5 --hdf5_path /opt/apps/intel18/impi18_0/phdf5/1.10.4/x86_64 --cxx icc --cflag "$TACC_VEC_FLAGS"
+ python configure_tacc.py --prob planet_wind_lambda_star_origin --coord spherical_polar -mpi -hdf5 --hdf5_path /opt/apps/intel18/impi18_0/phdf5/1.10.4/x86_64 --cxx icc --cflag "$TACC_VEC_FLAGS" --nscalars=1
 
