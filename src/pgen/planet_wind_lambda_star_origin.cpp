@@ -277,10 +277,26 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
   Real den, pres, vr;
   Real sma = pin->GetReal("problem","sma");
   
+  // Prepare index bounds including ghost cells
+  int il = is - NGHOST;
+  int iu = ie + NGHOST;
+  int jl = js;
+  int ju = je;
+  if (block_size.nx2 > 1) {
+    jl -= (NGHOST);
+    ju += (NGHOST);
+  }
+  int kl = ks;
+  int ku = ke;
+  if (block_size.nx3 > 1) {
+    kl -= (NGHOST);
+    ku += (NGHOST);
+  }
+  
   // SETUP THE INITIAL CONDITIONS ON MESH
-  for (int k=ks; k<=ke; k++) {
-    for (int j=js; j<=je; j++) {
-      for (int i=is; i<=ie; i++) {
+  for (int k=kl; k<=ku; k++) {
+    for (int j=jl; j<=ju; j++) {
+      for (int i=il; i<=iu; i++) {
 
 	Real r  = pcoord->x1v(i);
 	Real th = pcoord->x2v(j);
@@ -351,7 +367,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	}
 	
 	// Near star
-	if(r<=sma/2){
+	if(r<sma/2){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface_star * pow((r/r_inner),-8);
