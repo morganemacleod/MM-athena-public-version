@@ -704,16 +704,16 @@ Real mdotstar(MeshBlock *pmb, int iout){
 
 
 
-//void MeshBlock::UserWorkInLoop(void) {
-//  // Add timestep diagnostics
-//  if(pmy_mesh->ncycle % 10 == 0){
-//    if(new_block_dt_ == pmy_mesh->dt){
-//      // call NewBlockTimeStep with extra diagnostic output
-//      phydro->NewBlockTimeStep(1);
-//    }
-//  }  
-//  return;
-//}
+void MeshBlock::UserWorkInLoop(void) {
+  // Add timestep diagnostics
+  if(pmy_mesh->ncycle % 10 == 0){
+    if(new_block_dt_ == pmy_mesh->dt){
+      // call NewBlockTimeStep with extra diagnostic output
+      phydro->NewBlockTimeStep(1);
+    }
+  }  
+  return;
+}
 
 
 
