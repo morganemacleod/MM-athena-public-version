@@ -58,6 +58,8 @@ Real mdotstar(MeshBlock *pmb, int iout);
 
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
+Real press_factor_aniso( Real d2, Real solar_angle);
+
 
 //int RefinementCondition(MeshBlock *pmb);
 
@@ -265,6 +267,24 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
 
+Real press_factor_aniso(Real d2, Real solar_angle)
+{
+  Real press_factor = 1.0;
+  Real press_factor_aniso = std::max(0.01, std::cos(solar_angle));
+  if (aniso_heat){
+    if(d2<= 0.3*radius_planet){
+      press_factor = 1.0;
+    }else if(d2 <= 0.7*radius_planet){
+      press_factor = 1.0 + (press_factor_aniso-1.0)/(0.4*radius_planet)*(d2 - 0.5*radius_planet);
+    }else if(d2<=radius_planet){
+      press_factor = press_factor_aniso;
+    }else{
+      press_factor = 1.0;
+    }
+  } 
+  return press_factor;
+}
+
 
 
 
@@ -331,17 +351,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  phi2 += 2*3.1415926535; 
 	}
 	Real th2 = std::acos((z-xi[2])/d2);
-	Real solar_angle = std::acos( std::sin(th2)*std::cos(3.1415926535 - phi2) );
-	Real press_factor;
-	if (aniso_heat){
-	  press_factor = std::sqrt( std::max(0.01, std::cos(solar_angle)) );
-	} else {
-	  press_factor = 1.0;
-	}
-				  
+	Real solar_angle = std::acos( std::sin(th2)*std::cos( - phi2) );
+	Real press_factor = press_factor_aniso(d2,solar_angle);
 
 	// surface parameters (star and planet)
-	Real press_surface_planet = press_factor*rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
+	Real press_surface_planet = rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
 	Real cs_planet = std::sqrt(gamma_gas *press_surface_planet/rho_surface_planet);
 	Real press_surface_star = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
 	Real cs_star = std::sqrt(gamma_gas *press_surface_star/rho_surface_star);
@@ -355,7 +369,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	// Near Planet
 	if(d2 <= radius_planet){
 	  den = rho_surface_planet;
-	  pres = press_surface_planet;
+	  pres = press_factor*press_surface_planet;
 	  vx = vi[0] - sin(phi2)*(omega_planet-Omega[2])*R2;
 	  vy = vi[1] + cos(phi2)*(omega_planet-Omega[2])*R2;
 	  vz = vi[2];
@@ -561,15 +575,10 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	    phi2 += 2*3.1415926535; 
 	  }
 	  Real th2 = std::acos((z-xi[2])/d2);
-	  Real solar_angle = std::acos( std::sin(th2)*std::cos(3.1415926535 - phi2) );
-	  Real press_factor;
-	  if (aniso_heat){
-	    press_factor = std::sqrt( std::max(0.01, std::cos(solar_angle)) );
-	  } else {
-	    press_factor = 1.0;
-	  }
+	  Real solar_angle = std::acos( std::sin(th2)*std::cos( - phi2) );
+	  Real press_factor = press_factor_aniso(d2,solar_angle);
 	 
-	  Real press_surface_planet = press_factor*rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
+	  Real press_surface_planet = rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
 	  Real cs = std::sqrt(gamma_gas *press_surface_planet/rho_surface_planet);
 	  Real vx = vi[0] - sin(phi2)*(omega_planet-Omega[2])*R2;
 	  Real vy = vi[1] + cos(phi2)*(omega_planet-Omega[2])*R2;
@@ -584,7 +593,7 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	  cons(IM1,k,j,i) = rho_surface_planet*vr;
 	  cons(IM2,k,j,i) = rho_surface_planet*vth;  
 	  cons(IM3,k,j,i) = rho_surface_planet*vph;  
-	  cons(IEN,k,j,i) = press_surface_planet/(gamma_gas-1.0);
+	  cons(IEN,k,j,i) = press_factor*press_surface_planet/(gamma_gas-1.0);
 	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
 				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
 	  
