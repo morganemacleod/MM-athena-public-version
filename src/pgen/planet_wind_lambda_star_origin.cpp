@@ -121,10 +121,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
   n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
 
-  rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
+  //rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
   lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
 
-  rho_surface_planet = pin->GetOrAddReal("problem","rho_surface_planet",1.e-15);
+  //rho_surface_planet = pin->GetOrAddReal("problem","rho_surface_planet",1.e-15);
   lambda_planet = pin->GetOrAddReal("problem","lambda_planet",5.0);
   radius_planet = pin->GetOrAddReal("problem","radius_planet",6.955e10);
   aniso_heat    = pin->GetOrAddBoolean("problem","aniso_heat",false);
@@ -140,8 +140,16 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
   Real f_corot_planet = pin->GetOrAddReal("problem","f_corotation_planet",1.0);
   Real f_corot_star   = pin->GetOrAddReal("problem","f_corotation_star",1.0);
+  Real mdot_planet = pin->GetReal("problem","mdot_planet");
+  Real mdot_star   = pin->GetReal("problem","mdot_star");
   Real Omega_orb, vcirc;
- 
+
+  // set star/planet surface density
+  // NOTE: this is strictly correct for \gamma=1, will be different for varying gamma
+  rho_surface_star = mdot_star / (3.14159*sqrt(GM1*pow(r_inner*lambda_star,3))*exp(1.5-lambda_star) );
+  rho_surface_planet = mdot_planet / (3.14159*sqrt(GM2*pow(radius_planet*lambda_planet,3))*exp(1.5-lambda_planet) );
+  
+  
   // allocate MESH data for the particle pos/vel, Omega frame, omega_planet & omega_star
   AllocateRealUserMeshDataField(4);
   ruser_mesh_data[0].NewAthenaArray(3);
@@ -241,15 +249,15 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "lambda (star) = "<< lambda_star <<"\n";
     std::cout << "press_surface (star) =" << rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star) <<"\n";
     std::cout << "sound speed surface (star) =" << sqrt(GM1/(r_inner*lambda_star)) <<"\n";
-    std::cout << "temperature_surface (star) =" << (rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star)) / ( rho_surface_star * 8.3145e7) <<"\n";
-    std::cout << "estimated mdot (star) = "<<3.14*rho_surface_star*sqrt(GM1*pow(r_inner*lambda_star,3))*exp(1.5-lambda_star) <<"\n";
+    std::cout << "temperature_surface (star) =" << 0.61 *(rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star)) / ( rho_surface_star * 8.3145e7) <<"\n";
+    std::cout << "estimated mdot (star) = "<<3.14159*rho_surface_star*sqrt(GM1*pow(r_inner*lambda_star,3))*exp(1.5-lambda_star) <<"\n";
     std::cout << "rho_surface (planet) = "<< rho_surface_planet <<"\n";
     std::cout << "lambda (planet) = "<< lambda_planet <<"\n";
     std::cout << "aniso_heat (planet) =" << aniso_heat << "\n";
     std::cout << "press_surface (planet) =" << rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet) <<"\n";
     std::cout << "sound speed surface (star) =" << sqrt(GM2/(r_inner*lambda_planet)) <<"\n";
-    std::cout << "temperature_surface (planet) =" << (rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet)) / ( rho_surface_planet * 8.3145e7) <<"\n";
-    std::cout << "estimated mdot (planet) = "<<3.14*rho_surface_planet*sqrt(GM2*pow(radius_planet*lambda_planet,3))*exp(1.5-lambda_planet) <<"\n";
+    std::cout << "temperature_surface (planet) =" << 0.61 * (rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet)) / ( rho_surface_planet * 8.3145e7) <<"\n";
+    std::cout << "estimated mdot (planet) = "<<3.14159*rho_surface_planet*sqrt(GM2*pow(radius_planet*lambda_planet,3))*exp(1.5-lambda_planet) <<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
     std::cout << "==========================================================\n";
