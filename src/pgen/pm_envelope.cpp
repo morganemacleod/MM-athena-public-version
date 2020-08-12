@@ -177,6 +177,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // separation based ouput, triggered when dt=999. for an output type
   dsep_output = pin->GetOrAddReal("problem","dsep_output",999.);
+  Real output_next_sep_max = pin->GetOrAddReal("problem","output_next_sep_max",1.0);
+  output_next_sep = output_next_sep_max;
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -347,6 +349,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
           
   }else{
     is_restart=1;
+    trackfile_next_time=time;
   }
   
     
