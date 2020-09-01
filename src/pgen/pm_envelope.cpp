@@ -895,7 +895,8 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
       SumComPosVel(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, mg);
       //Real GMenv = Ggrav*mg;
-      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc,1.2);
+      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc,1.2) - GM1;
+
       
       for (int ii=1; ii<=1e8; ii++) {
 	sep = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2]);
