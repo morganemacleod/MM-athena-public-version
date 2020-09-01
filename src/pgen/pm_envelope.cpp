@@ -1208,7 +1208,8 @@ void ParticleAccelsPreInt(Real GMenv, Real (&xi)[3],Real (&vi)[3],Real (&ai)[3])
 
 
 void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)[3]){
-  
+
+  Real m1 =  GM1/Ggrav;
   // start by setting accelerations / positions to zero
   for (int ii = 0; ii < 3; ii++){
     ag1i[ii] = 0.0;
@@ -1250,6 +1251,42 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
 			 pow(z-xi[2], 2) );
   
 	  Real d1c = pow(r,3);
+
+	  // if we're on the innermost zone of the innermost block, assuming reflecting bc
+	  if((pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) && (i==pmb->is)) {
+	    // inner-r face area of cell i
+	    Real dA = pmb->pcoord->GetFace1Area(k,j,i);
+	  	 
+	    // spherical velocities
+	    Real vr =  phyd->u(IM1,k,j,i) / phyd->u(IDN,k,j,i);
+	    Real vth =  phyd->u(IM2,k,j,i) / phyd->u(IDN,k,j,i);
+	    Real vph =  phyd->u(IM3,k,j,i) / phyd->u(IDN,k,j,i);
+
+	    // get the cartesian velocities from the spherical (vector)
+	    Real vgas[3];
+	    vgas[0] = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
+	    vgas[1] = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
+	    vgas[2] = cos_th*vr - sin_th*vth;
+
+	    Real dAvec[3];
+	    dAvec[0] = dA*(x/r);
+	    dAvec[1] = dA*(y/r);
+	    dAvec[2] = dA*(z/r);
+
+	    // pressure terms (surface force/m1)
+	    ag1i[0] +=  -phyd->w(IPR,k,j,i)*dAvec[0];
+	    ag1i[1] +=  -phyd->w(IPR,k,j,i)*dAvec[1];
+	    ag1i[2] +=  -phyd->w(IPR,k,j,i)*dAvec[2];
+
+	    // momentum flux terms
+	    Real dAv = vgas[0]*dAvec[0] + vgas[1]*dAvec[1] + vgas[2]*dAvec[2];
+	    ag1i[0] += phyd->u(IDN,k,j,i)*dAv*vgas[0];
+	    ag1i[1] += phyd->u(IDN,k,j,i)*dAv*vgas[1];
+	    ag1i[2] += phyd->u(IDN,k,j,i)*dAv*vgas[2];
+
+	  }
+
+	  
 	  
 	   // gravitational accels in cartesian coordinates
 	  
