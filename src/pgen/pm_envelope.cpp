@@ -85,6 +85,10 @@ Real mxOmegaEnv(MeshBlock *pmb, int iout);
 Real mEnv(MeshBlock *pmb, int iout);
 Real mr1(MeshBlock *pmb, int iout);
 Real mr12(MeshBlock *pmb, int iout);
+Real LzEnv(MeshBlock *pmb, int iout);
+Real KEEnv(MeshBlock *pmb, int iout);
+Real PEEnv(MeshBlock *pmb, int iout);
+Real TEEnv(MeshBlock *pmb, int iout);
 
 
 //Real UpdatePMTimestep(MeshBlock *pmb);
@@ -212,13 +216,15 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     EnrollUserRefinementCondition(RefinementCondition);
 
   // Enroll extra history output
-  AllocateUserHistoryOutput(4);
+  AllocateUserHistoryOutput(8);
   EnrollUserHistoryOutput(0, mxOmegaEnv, "mxOmegaEnv");
   EnrollUserHistoryOutput(1, mEnv, "mEnv");
   EnrollUserHistoryOutput(2, mr1, "mr1");
   EnrollUserHistoryOutput(3, mr12, "mr12");
-  //EnrollUserHistoryOutput(4, mb, "mb");
-  //EnrollUserHistoryOutput(5, mu, "mu");
+  EnrollUserHistoryOutput(4, LzEnv, "LzEnv");
+  EnrollUserHistoryOutput(5, PEEnv, "PEEnv");
+  EnrollUserHistoryOutput(6, TEEnv, "TEEnv");
+  EnrollUserHistoryOutput(7, KEEnv, "KEEnv");
   
 
   // always write at startup
@@ -418,7 +424,7 @@ Real mxOmegaEnv(MeshBlock *pmb, int iout){
 	Real dens = pmb->phydro->u(IDN,k,j,i);
 	Real dm = vol(i) * dens;
 
-	if(dens > 1.e-3){
+	if( (dens > 1.e-4) && (r<2.0) ){
 	  mxOmega += dm*(pmb->phydro->u(IM3,k,j,i)/dens) / (r*sin_th);
 	}
 	
@@ -439,13 +445,14 @@ Real mEnv(MeshBlock *pmb, int iout){
   
   for(int k=ks; k<=ke; k++) {
     for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
+      //Real th= pmb->pcoord->x2v(j);
+      //Real sin_th = sin(th);
       pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
       for(int i=is; i<=ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
 	Real dens = pmb->phydro->u(IDN,k,j,i);
 	Real dm = vol(i) * dens;
-	if(dens > 1.e-3){
+	if( (dens > 1.e-4) && (r<2.0) ){
 	  menv += dm;
 	}
       }
@@ -454,6 +461,131 @@ Real mEnv(MeshBlock *pmb, int iout){
   
   return menv;
 }
+
+Real LzEnv(MeshBlock *pmb, int iout){
+  Real Lz = 0.0;
+  
+  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+  AthenaArray<Real> vol;
+  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+  vol.NewAthenaArray(ncells1);
+  
+  for(int k=ks; k<=ke; k++) {
+    for(int j=js; j<=je; j++) {
+      Real th= pmb->pcoord->x2v(j);
+      Real sin_th = sin(th);
+      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
+      for(int i=is; i<=ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real dens = pmb->phydro->u(IDN,k,j,i);
+	//Real dm = vol(i) * dens;
+
+	if( (dens > 1.e-4) && (r<2.0) ){
+	  Lz += pmb->phydro->u(IM3,k,j,i)*vol(i)*r*sin_th;
+	}
+	
+      }
+    }
+  }
+  
+  return Lz;
+}
+
+
+Real PEEnv(MeshBlock *pmb, int iout){
+  Real PE = 0.0;
+  
+  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+  AthenaArray<Real> vol;
+  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+  vol.NewAthenaArray(ncells1);
+  
+  for(int k=ks; k<=ke; k++) {
+    for(int j=js; j<=je; j++) {
+      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
+      for(int i=is; i<=ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real dens = pmb->phydro->u(IDN,k,j,i);
+	Real dm = vol(i) * dens;
+
+	if( (dens > 1.e-4) && (r<2.0) ){
+	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
+	  Real phir = -GMenc1*pmb->pcoord->coord_src1_i_(i);
+	  PE += dm*phir;
+	}
+	
+      }
+    }
+  }
+  
+  return PE;
+}
+
+
+Real KEEnv(MeshBlock *pmb, int iout){
+  Real KE = 0.0;
+  
+  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+  AthenaArray<Real> vol;
+  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+  vol.NewAthenaArray(ncells1);
+  
+  for(int k=ks; k<=ke; k++) {
+    for(int j=js; j<=je; j++) {
+      Real th= pmb->pcoord->x2v(j);
+      Real sin_th = sin(th);
+      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
+      for(int i=is; i<=ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real dens = pmb->phydro->u(IDN,k,j,i);
+	//Real dm = vol(i) * dens;
+
+	if( (dens > 1.e-4) && (r<2.0) ){
+	  KE += 0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+		     + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i);
+	}
+	
+      }
+    }
+  }
+  
+  return KE;
+}
+
+Real TEEnv(MeshBlock *pmb, int iout){
+  Real TE = 0.0;
+  
+  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+  AthenaArray<Real> vol;
+  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+  vol.NewAthenaArray(ncells1);
+  
+  for(int k=ks; k<=ke; k++) {
+    for(int j=js; j<=je; j++) {
+      Real th= pmb->pcoord->x2v(j);
+      Real sin_th = sin(th);
+      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
+      for(int i=is; i<=ie; i++) {
+	Real r = pmb->pcoord->x1v(i);
+	Real dens = pmb->phydro->u(IDN,k,j,i);
+	//Real dm = vol(i) * dens;
+
+	if( (dens > 1.e-4) && (r<2.0) ){
+	  TE += (pmb->phydro->u(IEN,k,j,i) -
+		 0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+		      + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
+	}
+	
+      }
+    }
+  }
+  
+  return TE;
+}
+
+
+
+
 
 Real mr1(MeshBlock *pmb, int iout){
   Real mr1 = 0.0;
