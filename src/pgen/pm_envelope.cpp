@@ -541,8 +541,8 @@ Real KEEnv(MeshBlock *pmb, int iout){
 	Real dm = vol(i) * dens;
 
 	if( (dens > 1.e-4) && (r<2.0) ){
-	  KE += 0.5*vol(i)*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
-			    + SQR(pmb->phydro->u(IM3,k,j,i)));
+	  KE += vol(i)*0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+			    + SQR(pmb->phydro->u(IM3,k,j,i)))/dens;
 	}
 	
       }
