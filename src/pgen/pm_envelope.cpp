@@ -1686,7 +1686,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			      SQR(y-xi[1]) +
 			      SQR(z-xi[2]) );
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
-	  Real h = gamma_gas * pmb->phydro->u(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
+	  Real h = gamma_gas * pmb->phydro->w(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
 	  Real epot = -GMenc1/r - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
 	  Real bern = h+ek+epot;
