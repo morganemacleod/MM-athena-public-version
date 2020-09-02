@@ -1690,7 +1690,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  Real epot = -GMenc1/r - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
 	  Real bern = h+ek+epot;
-	  if( r>1.0) {
+	  if( phyd->u(IDN,k,j,i)<1.e-4 ) {
 	    if (bern < 0.0){
 	      mb += dm;
 	    }else{
