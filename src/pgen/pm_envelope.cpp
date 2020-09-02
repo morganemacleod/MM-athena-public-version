@@ -511,7 +511,7 @@ Real PEEnv(MeshBlock *pmb, int iout){
 	if( (dens > 1.e-4) && (r<2.0) ){
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
 	  Real phir = -GMenc1*pmb->pcoord->coord_src1_i_(i);
-	  PE += dm*phir;
+	  PE += 0.5*dm*phir;
 	}
 	
       }
