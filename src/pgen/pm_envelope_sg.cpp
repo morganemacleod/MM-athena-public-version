@@ -43,7 +43,7 @@
 
 
 
-Real Interpolate1DArrayEven(Real *x,Real *y,Real x0);
+Real Interpolate1DArrayEven(Real *x,Real *y,Real x0, int length);
 
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
@@ -249,7 +249,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
  
   
   // set the inner point mass based on excised mass
-  Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin );
+  Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin, NARRAY );
   GM1 = Ggrav*menc_rin;
 
 
@@ -259,7 +259,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   
   for(int i=0;i<NGRAV;i++){
     logr[i] = logr_min + (logr_max-logr_min)/(NGRAV-1)*i;
-    menc[i] = Interpolate1DArrayEven(rad,menc_init, pow(10,logr[i]) );
+    menc[i] = Interpolate1DArrayEven(rad,menc_init, pow(10,logr[i]), NGRAV );
   }
   
   
@@ -295,7 +295,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 		       pow(z-z_2, 2) );
 	
 	// mass element
-	Real den = Interpolate1DArrayEven(rad,rho, r );
+	Real den = Interpolate1DArrayEven(rad,rho, r , NARRAY);
 	Real dm = r*r*sin(th)*dr*dth*dph * den;
 	
 	//mass
@@ -523,7 +523,7 @@ Real PEEnv(MeshBlock *pmb, int iout){
 	Real dm = vol(i) * dens;
 
 	if( (dens > 1.e-4) && (r<2.0) ){
-	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r));
+	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r), NGRAV);
 	  PE += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
 	}
 	
@@ -776,7 +776,7 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	//Real a_r1 = -GM1/pow(r,2);
 	// cell volume avg'd version, see pointmass.cpp sourceterm code. 
 	//Real a_r1 = -GM1*pmb->pcoord->coord_src1_i_(i)/r;
-	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r));
+	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
 	Real a_r1 = -GMenc1*pmb->pcoord->coord_src1_i_(i)/r;
 	//Real a_r1 = -GMenc1/pow(r,2);
 	
@@ -913,11 +913,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real Rcyl = r*sin_th;
 	
 	// get the density
-	den = Interpolate1DArrayEven(rad,rho, r );
+	den = Interpolate1DArrayEven(rad,rho, r , NARRAY);
 	den = std::max(den,da);
 	
 	// get the pressure 
-	pres = Interpolate1DArrayEven(rad,p, r );
+	pres = Interpolate1DArrayEven(rad,p, r , NARRAY);
 	pres = std::max(pres,pa);
 
 	// set the density
@@ -1024,7 +1024,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
       SumComPosVel(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, mg);
       //Real GMenv = Ggrav*mg;
-      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01) - GM1;
+      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
 
       
       for (int ii=1; ii<=1e8; ii++) {
@@ -1123,7 +1123,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   if(ncycle%update_grav_every == 0){
     SumMencProfile(pblock->pmy_mesh,menc);
     if (Globals::my_rank == 0 ){
-      std::cout << "enclosed mass updated... Menc(r=1) = " << Interpolate1DArrayEven(logr,menc,0.0) <<"\n";
+      std::cout << "enclosed mass updated... Menc(r=1) = " << Interpolate1DArrayEven(logr,menc,0.0, NGRAV) <<"\n";
     }
   }
 
@@ -1690,7 +1690,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  Real d2 = std::sqrt(SQR(x-xi[0]) +
 			      SQR(y-xi[1]) +
 			      SQR(z-xi[2]) );
-	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc, log10(r));
+	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc, log10(r), NGRAV);
 	  Real h = gamma_gas * pmb->phydro->w(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
 	  Real epot = -GMenc1/r - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
@@ -1889,49 +1889,19 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 
 
 
-// Real Interpolate1DArray(Real *x,Real *y,Real x0){
-//   int i;
-//   Real d,dx,s,y0;
-//   //std::cout.precision(17);
-  
-
-//   // check the lower bound
-//   if(x[0] >= x0){
-//     //std::cout << "hit lower bound!\n";
-//     return y[0];
-//   }
-//   // check the upper bound
-//   if(x[NARRAY-1] <= x0){
-//     //std::cout << "hit upper bound!\n";
-//     return y[NARRAY-1];
-//   }
-
-//   // if in the interior, do a linear interpolation
-//   for(i=0;i<NARRAY-1;i++){
-//     if (x[i+1] >= x0){
-//       dx =  (x[i+1]-x[i]);
-//       d = (x0 - x[i]);
-//       s = (y[i+1]-y[i]) /dx;
-//       y0 = s*d + y[i];
-//       return y0;
-//     }
-//   }
-//   // should never get here, -9999.9 represents an error
-//   return -9999.9;
-// }
-
 
 // 1D Interpolation that assumes EVEN spacing in x array
-Real Interpolate1DArrayEven(Real *x,Real *y,Real x0){ 
+
+Real Interpolate1DArrayEven(Real *x,Real *y,Real x0, int length){ 
   // check the lower bound
   if(x[0] >= x0){
     //std::cout << "hit lower bound!\n";
     return y[0];
   }
   // check the upper bound
-  if(x[NARRAY-1] <= x0){
+  if(x[length-1] <= x0){
     //std::cout << "hit upper bound!\n";
-    return y[NARRAY-1];
+    return y[length-1];
   }
 
   int i = floor( (x0-x[0])/(x[1]-x[0]) );
