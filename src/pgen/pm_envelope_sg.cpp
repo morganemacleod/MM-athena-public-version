@@ -23,6 +23,7 @@
 #include <fstream>
 #include <iostream>
 #define NARRAY 10000
+#define NGRAV 100
 
 
 // Athena++ headers
@@ -78,6 +79,8 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3],Real (&vi)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3], Real &Eorb,
 			     Real &mb, Real &mu);
 
+void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]);
+
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
@@ -96,7 +99,8 @@ Real TEEnv(MeshBlock *pmb, int iout);
 // global (to this file) problem parameters
 Real gamma_gas; 
 Real da,pa; // ambient density, pressure
-Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc[NARRAY];  // initial profile
+Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc_init[NARRAY];  // initial profile
+Real logr[NGRAV],menc[NGRAV]; // enclosed mass profile
 
 Real GM2, GM1; // point masses
 Real rsoft2; // softening length of PM 2
@@ -133,7 +137,7 @@ Real Omega_orb_fixed,sma_fixed;
 
 Real output_next_sep,dsep_output; // controling user forced output (set with dt=999.)
 
-
+int update_grav_every;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -164,7 +168,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
 
   include_gas_backreaction = pin->GetInteger("problem","gas_backreaction");
-    n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
+  n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
 
   separation_stop_min = pin->GetOrAddReal("problem","separation_stop_min",0.0);
   separation_stop_max = pin->GetOrAddReal("problem","separation_stop_max",1.e99);
@@ -182,6 +186,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Real output_next_sep_max = pin->GetOrAddReal("problem","output_next_sep_max",1.0);
   output_next_sep = output_next_sep_max;
 
+  // gravity
+  update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
+    
+  
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
   Real rmax = pin->GetOrAddReal("mesh","x1max",0.0);
@@ -234,16 +242,25 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // read in profile arrays from file
   std::ifstream infile("hse_profile.dat"); 
   for(int i=0;i<NARRAY;i++){
-    infile >> rad[i] >> rho[i] >> p[i] >> menc[i];
+    infile >> rad[i] >> rho[i] >> p[i] >> menc_init[i];
     //std:: cout << rad[i] << "    " << rho[i] << std::endl;
   }
   infile.close();
-
-
-  // set the inner point mass based on excised mass
-  Real menc_rin = Interpolate1DArrayEven(rad,menc, rmin );
-  GM1 = Ggrav*menc_rin;
+ 
   
+  // set the inner point mass based on excised mass
+  Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin );
+  GM1 = Ggrav*menc_rin;
+
+
+  // allocate the enclosed mass profile
+  Real logr_min = log10(rmin);
+  Real logr_max = log10(rmax);
+  
+  for(int i=0;i<NGRAV;i++){
+    logr[i] = logr_min + (logr_max-logr_min)/(NGRAV-1)*i;
+    menc[i] = Interpolate1DArrayEven(rad,menc_init, pow(10,logr[i]) );
+  }
   
   
   // need to do a 3D integral to get the gravitational acceleration
@@ -506,7 +523,7 @@ Real PEEnv(MeshBlock *pmb, int iout){
 	Real dm = vol(i) * dens;
 
 	if( (dens > 1.e-4) && (r<2.0) ){
-	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
+	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r));
 	  PE += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
 	}
 	
@@ -759,7 +776,7 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	//Real a_r1 = -GM1/pow(r,2);
 	// cell volume avg'd version, see pointmass.cpp sourceterm code. 
 	//Real a_r1 = -GM1*pmb->pcoord->coord_src1_i_(i)/r;
-	Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
+	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r));
 	Real a_r1 = -GMenc1*pmb->pcoord->coord_src1_i_(i)/r;
 	//Real a_r1 = -GMenc1/pow(r,2);
 	
@@ -1007,7 +1024,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
       SumComPosVel(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, mg);
       //Real GMenv = Ggrav*mg;
-      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc,1.2) - GM1;
+      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01) - GM1;
 
       
       for (int ii=1; ii<=1e8; ii++) {
@@ -1102,6 +1119,14 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   }
   output_next_sep = floor(d/dsep_output)*dsep_output; // rounds to the nearest lower sep
   
+  // sum the enclosed mass profile for monopole gravity
+  if(ncycle%update_grav_every == 0){
+    SumMencProfile(pblock->pmy_mesh,menc);
+    if (Globals::my_rank == 0 ){
+      std::cout << "enclosed mass updated... Menc(r=1) = " << Interpolate1DArrayEven(logr,menc,0.0) <<"\n";
+    }
+  }
+
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
@@ -1665,7 +1690,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  Real d2 = std::sqrt(SQR(x-xi[0]) +
 			      SQR(y-xi[1]) +
 			      SQR(z-xi[2]) );
-	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(rad,menc, r);
+	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc, log10(r));
 	  Real h = gamma_gas * pmb->phydro->w(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
 	  Real epot = -GMenc1/r - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
@@ -1740,6 +1765,62 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 
 
+void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]){
+
+  Real m1 =  GM1/Ggrav;
+  // start by setting enclosed mass at each radius to zero
+  for (int ii = 0; ii <NGRAV; ii++){
+    menc[ii] = 0.0;
+  }
+  
+  MeshBlock *pmb=pm->pblock;
+  AthenaArray<Real> vol;
+  
+  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+  vol.NewAthenaArray(ncells1);
+
+  while (pmb != NULL) {
+    Hydro *phyd = pmb->phydro;
+
+    // Sum history variables over cells.  Note ghost cells are never included in sums
+    for (int k=pmb->ks; k<=pmb->ke; ++k) {
+      for (int j=pmb->js; j<=pmb->je; ++j) {
+	pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
+	for (int i=pmb->is; i<=pmb->ie; ++i) {
+	  // cell mass dm
+	  Real dm = vol(i) * phyd->u(IDN,k,j,i);
+	  Real logr_cell = log10( pmb->pcoord->x1v(i) );
+
+	  // loop over radii in profile
+	  for (int ii = 0; ii <NGRAV; ii++){
+	    if( logr_cell < logr[ii] ){
+	      menc[ii] += dm;
+	    }
+	  }
+	  
+	}
+      }
+    }//end loop over cells
+    pmb=pmb->next;
+  }//end loop over meshblocks
+
+#ifdef MPI_PARALLEL
+  // sum over all ranks, add m1
+  if (Globals::my_rank == 0) {
+    for (int ii = 0; ii <NGRAV; ii++){
+      menc[ii] += m1;
+    }
+    MPI_Reduce(MPI_IN_PLACE, menc, NGRAV, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+  } else {
+    MPI_Reduce(menc,menc,NGRAV, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+  }
+
+  
+  // and broadcast the result
+  MPI_Bcast(menc,NGRAV,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+#endif
+    
+}
 
 
 
