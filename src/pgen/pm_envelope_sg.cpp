@@ -86,6 +86,8 @@ void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
+bool instar(Real den, Real r);
+
 
 // global (to this file) problem parameters
 Real gamma_gas; 
@@ -1323,7 +1325,7 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  vgcom[2] += dm*vgas[2];
 
 	  // do the summation (within the star)
-	  if( (phyd->u(IDN,k,j,i)>1.e-4) & (r<2) ){
+	  if( instar(phyd->u(IDN,k,j,i), r ) ){
 	    mg_star += dm;
 	    
 	    xgcom_star[0] += dm*x;
@@ -1512,8 +1514,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 
 	  // enclosed mass within different conditions
-	  bool instar =( (phyd->u(IDN,k,j,i) > 1.e-4) & (r<2) );
-	  if(instar==true){
+	  if(instar(phyd->u(IDN,k,j,i),r)){
 	    M_star += dm;
 	  }
 	  if(r<1.0){
@@ -1533,7 +1534,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
 	  Real bern = h+ek+epot;
 	  // bound/unbound mass outside of the star
-	  if (instar == false ) {
+	  if ( instar(phyd->u(IDN,k,j,i),r)==false ) {
 	    if (bern < 0.0){
 	      mb += dm;
 	    }else{
@@ -1549,7 +1550,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			      + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
 
 	  // stellar frame energy / angular momentum
-	  if(instar == true){
+	  if(instar(phyd->u(IDN,k,j,i),r) ){
 	    EK_star += vol(i)*0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
 				   + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i);
 	    EI_star += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
@@ -1849,4 +1850,9 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]){
   AxB[0] = A[1]*B[2] - A[2]*B[1];
   AxB[1] = A[2]*B[0] - A[0]*B[2];
   AxB[2] = A[0]*B[1] - A[1]*B[0];
+}
+
+
+bool instar(Real den, Real r){
+  return ((den<1.e-4) & (r<2))
 }
