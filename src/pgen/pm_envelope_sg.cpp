@@ -1646,7 +1646,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   // calculate the orbital energy and angular momenta
   Real v1_sq = SQR(vcom_star[0]-vcom[0]) + SQR(vcom_star[1]-vcom[1]) + SQR(vcom_star[2]-vcom[2]);
   Real v2_sq = SQR(vi[0]-vcom[0]) + SQR(vi[1]-vcom[1]) + SQR(vi[2]-vcom[2]);
-  EK += 0.5*m1*SQR(vcom[0]) + SQR(vcom[1]) + SQR(vcom[2]);
+  EK += 0.5*m1*(SQR(vcom[0]) + SQR(vcom[1]) + SQR(vcom[2]));
   EK += 0.5*m2*v2_sq;
   Eorb = 0.5*M_star*v1_sq + 0.5*m2*v2_sq - Ggrav*M_star*m2/d12;
   Real Lz_1 = M_star*(xcom_star[0]*(vcom_star[1]-vcom[1]) - xcom_star[1]*(vcom_star[0]-vcom[0]));
