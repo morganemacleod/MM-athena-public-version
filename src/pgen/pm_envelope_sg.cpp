@@ -74,7 +74,6 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 		     Real &mg, Real &mg_star);
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-			     Real (&xcom)[3],Real (&vcom)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
 			     Real &EK, Real &EPot, Real &EI,
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
@@ -87,17 +86,6 @@ void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]);
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
 
-Real mxOmegaEnv(MeshBlock *pmb, int iout);
-Real mEnv(MeshBlock *pmb, int iout);
-Real mr1(MeshBlock *pmb, int iout);
-Real mr12(MeshBlock *pmb, int iout);
-Real LzEnv(MeshBlock *pmb, int iout);
-Real KEEnv(MeshBlock *pmb, int iout);
-Real PEEnv(MeshBlock *pmb, int iout);
-Real TEEnv(MeshBlock *pmb, int iout);
-
-
-//Real UpdatePMTimestep(MeshBlock *pmb);
 
 // global (to this file) problem parameters
 Real gamma_gas; 
@@ -115,8 +103,7 @@ Real xi[3], vi[3], agas1i[3], agas2i[3]; // cartesian positions/vels of the seco
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xcom_star[3], vcom_star[3]; // cartesian pos/vel of the COM of the star
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
-Real Eorb; // diagnostic output
-Real mb,mu; // masses of bound/unbound gas outside r=1 for diagnostic output
+Real EK, EPot, EI, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb; // diagnostic output
 
 Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelope
 
@@ -225,15 +212,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     EnrollUserRefinementCondition(RefinementCondition);
 
   // Enroll extra history output
-  AllocateUserHistoryOutput(8);
-  EnrollUserHistoryOutput(0, mxOmegaEnv, "mxOmegaEnv");
-  EnrollUserHistoryOutput(1, mEnv, "mEnv");
-  EnrollUserHistoryOutput(2, mr1, "mr1");
-  EnrollUserHistoryOutput(3, mr12, "mr12");
-  EnrollUserHistoryOutput(4, LzEnv, "LzEnv");
-  EnrollUserHistoryOutput(5, PEEnv, "PEEnv");
-  EnrollUserHistoryOutput(6, TEEnv, "TEEnv");
-  EnrollUserHistoryOutput(7, KEEnv, "KEEnv");
+  //AllocateUserHistoryOutput(8);
+  //EnrollUserHistoryOutput(0, mxOmegaEnv, "mxOmegaEnv");
   
 
   // always write at startup
@@ -421,243 +401,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
 } // end
-
-
-Real mxOmegaEnv(MeshBlock *pmb, int iout){
-  Real mxOmega = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real dens = pmb->phydro->u(IDN,k,j,i);
-	Real dm = vol(i) * dens;
-
-	if( (dens > 1.e-4) && (r<2.0) ){
-	  mxOmega += dm*(pmb->phydro->u(IM3,k,j,i)/dens) / (r*sin_th);
-	}
-	
-      }
-    }
-  }
-  
-  return mxOmega;
-}
-
-Real mEnv(MeshBlock *pmb, int iout){
-  Real menv = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      //Real th= pmb->pcoord->x2v(j);
-      //Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real dens = pmb->phydro->u(IDN,k,j,i);
-	Real dm = vol(i) * dens;
-	if( (dens > 1.e-4) && (r<2.0) ){
-	  menv += dm;
-	}
-      }
-    }
-  }
-  
-  return menv;
-}
-
-Real LzEnv(MeshBlock *pmb, int iout){
-  Real Lz = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real dens = pmb->phydro->u(IDN,k,j,i);
-	//Real dm = vol(i) * dens;
-
-	if( (dens > 1.e-4) && (r<2.0) ){
-	  Lz += pmb->phydro->u(IM3,k,j,i)*vol(i)*r*sin_th;
-	}
-	
-      }
-    }
-  }
-  
-  return Lz;
-}
-
-
-Real PEEnv(MeshBlock *pmb, int iout){
-  Real PE = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real dens = pmb->phydro->u(IDN,k,j,i);
-	Real dm = vol(i) * dens;
-
-	if( (dens > 1.e-4) && (r<2.0) ){
-	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r), NGRAV);
-	  PE += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
-	}
-	
-      }
-    }
-  }
-  
-  return PE;
-}
-
-
-Real KEEnv(MeshBlock *pmb, int iout){
-  Real KE = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real dens = pmb->phydro->u(IDN,k,j,i);
-	Real dm = vol(i) * dens;
-
-	if( (dens > 1.e-4) && (r<2.0) ){
-	  KE += vol(i)*0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
-			    + SQR(pmb->phydro->u(IM3,k,j,i)))/dens;
-	}
-	
-      }
-    }
-  }
-  
-  return KE;
-}
-
-Real TEEnv(MeshBlock *pmb, int iout){
-  Real TE = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	Real r = pmb->pcoord->x1v(i);
-	Real dens = pmb->phydro->u(IDN,k,j,i);
-	//Real dm = vol(i) * dens;
-
-	if( (dens > 1.e-4) && (r<2.0) ){
-	  TE += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
-			 0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
-			      + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
-	}
-	
-      }
-    }
-  }
-  
-  return TE;
-}
-
-
-
-
-
-Real mr1(MeshBlock *pmb, int iout){
-  Real mr1 = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	if(pmb->pcoord->x1v(i) <= 1.0){
-	  Real dens = pmb->phydro->u(IDN,k,j,i);
-	  Real dm = vol(i) * dens;
-	  mr1 += dm;
-	}
-      }
-    }
-  }
-  
-  return mr1;
-}
-
-Real mr12(MeshBlock *pmb, int iout){
-  Real mr12 = 0.0;
-  
-  int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
-  AthenaArray<Real> vol;
-  int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-  vol.NewAthenaArray(ncells1);
-  
-  for(int k=ks; k<=ke; k++) {
-    for(int j=js; j<=je; j++) {
-      Real th= pmb->pcoord->x2v(j);
-      Real sin_th = sin(th);
-      pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-      for(int i=is; i<=ie; i++) {
-	if(pmb->pcoord->x1v(i) <= 1.2){
-	  Real dens = pmb->phydro->u(IDN,k,j,i);
-	  Real dm = vol(i) * dens;
-	  mr12 += dm;
-	}
-      }
-    }
-  }
-  
-  return mr12;
-}
-
-
-
-
 
 
 
@@ -1140,7 +883,9 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   // write the output to the trackfile
   if(time >= trackfile_next_time || user_force_output ){
     SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
-    SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, xcom, vcom, lp, lg, ldo, Eorb,mb,mu);
+    SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, lp, lg, ldo,
+			    EK, EPot, EI, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu,
+			    Eorb, Lz_star, Lz_orb);
     WritePMTrackfile(pblock->pmy_mesh,pin);
   }
 
@@ -1170,16 +915,16 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
   
     if(trackfile_number==0){
       fprintf(pfile,"#    ncycle     ");
-      fprintf(pfile,"time           ");
-      fprintf(pfile,"dt             ");
-      fprintf(pfile,"m1             ");
-      fprintf(pfile,"m2             ");
-      fprintf(pfile,"x              ");
-      fprintf(pfile,"y              ");
-      fprintf(pfile,"z              ");
-      fprintf(pfile,"vx             ");
-      fprintf(pfile,"vy             ");
-      fprintf(pfile,"vz             ");
+      fprintf(pfile,"time            ");
+      fprintf(pfile,"dt              ");
+      fprintf(pfile,"m1              ");
+      fprintf(pfile,"m2              ");
+      fprintf(pfile,"x               ");
+      fprintf(pfile,"y               ");
+      fprintf(pfile,"z               ");
+      fprintf(pfile,"vx              ");
+      fprintf(pfile,"vy              ");
+      fprintf(pfile,"vz              ");
       fprintf(pfile,"agas1x          ");
       fprintf(pfile,"agas1y          ");
       fprintf(pfile,"agas1z          ");
@@ -1189,15 +934,32 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"xcom            ");
       fprintf(pfile,"ycom            ");
       fprintf(pfile,"zcom            ");
-      fprintf(pfile,"vxcom            ");
-      fprintf(pfile,"vycom            ");
-      fprintf(pfile,"vzcom            ");
+      fprintf(pfile,"vxcom           ");
+      fprintf(pfile,"vycom           ");
+      fprintf(pfile,"vzcom           ");
+      fprintf(pfile,"xcom_star       ");
+      fprintf(pfile,"ycom_star       ");
+      fprintf(pfile,"zcom_star       ");
+      fprintf(pfile,"vxcom_star      ");
+      fprintf(pfile,"vycom_star      ");
+      fprintf(pfile,"vzcom_star      ");
       fprintf(pfile,"lpz             ");
       fprintf(pfile,"lgz             ");
       fprintf(pfile,"ldoz            ");
-      fprintf(pfile,"Eorb            ");
+      fprintf(pfile,"EK              ");
+      fprintf(pfile,"EPot            ");
+      fprintf(pfile,"EI              ");
+      fprintf(pfile,"EK_star         ");
+      fprintf(pfile,"EPot_star       ");
+      fprintf(pfile,"EI_star         ");
+      fprintf(pfile,"M_star          ");
+      fprintf(pfile,"Lz_star         ");
+      fprintf(pfile,"mr1             ");
+      fprintf(pfile,"mr12            ");
       fprintf(pfile,"mb              ");
       fprintf(pfile,"mu              ");
+      fprintf(pfile,"Eorb            ");
+      fprintf(pfile,"Lz_orb          ");
       fprintf(pfile,"\n");
     }
 
@@ -1226,12 +988,29 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",vcom[0]);
     fprintf(pfile,"%20.6e",vcom[1]);
     fprintf(pfile,"%20.6e",vcom[2]);
+    fprintf(pfile,"%20.6e",xcom_star[0]);
+    fprintf(pfile,"%20.6e",xcom_star[1]);
+    fprintf(pfile,"%20.6e",xcom_star[2]);
+    fprintf(pfile,"%20.6e",vcom_star[0]);
+    fprintf(pfile,"%20.6e",vcom_star[1]);
+    fprintf(pfile,"%20.6e",vcom_star[2]);
     fprintf(pfile,"%20.6e",lp[2]);
     fprintf(pfile,"%20.6e",lg[2]);
     fprintf(pfile,"%20.6e",ldo[2]);
-    fprintf(pfile,"%20.6e",Eorb);
+    fprintf(pfile,"%20.6e",EK);
+    fprintf(pfile,"%20.6e",EPot);
+    fprintf(pfile,"%20.6e",EI);
+    fprintf(pfile,"%20.6e",EK_star);
+    fprintf(pfile,"%20.6e",EPot_star);
+    fprintf(pfile,"%20.6e",EI_star);
+    fprintf(pfile,"%20.6e",M_star);
+    fprintf(pfile,"%20.6e",Lz_star);
+    fprintf(pfile,"%20.6e",mr1);
+    fprintf(pfile,"%20.6e",mr12);
     fprintf(pfile,"%20.6e",mb);
     fprintf(pfile,"%20.6e",mu);
+    fprintf(pfile,"%20.6e",Eorb);
+    fprintf(pfile,"%20.6e",Lz_orb);
     fprintf(pfile,"\n");
 
     // close the file
@@ -1607,7 +1386,6 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-			     Real (&xcom)[3],Real (&vcom)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
 			     Real &EK, Real &EPot, Real &EI,
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
@@ -1725,7 +1503,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 
 	  // enclosed mass within different conditions
-	  bool instar = (phyd->u(IDN,k,j,i) > 1.e-4) & (r<2)
+	  bool instar =( (phyd->u(IDN,k,j,i) > 1.e-4) & (r<2) );
 	  if(instar==true){
 	    M_star += dm;
 	  }
@@ -1768,7 +1546,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	    EI_star += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
 				0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
 				     + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
-	    Epot_star += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
+	    EPot_star += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
 
 	    Lz_star += pmb->phydro->u(IM3,k,j,i)*vol(i)*r*sin_th;
 	  }
@@ -1779,21 +1557,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     }//end loop over cells
     pmb=pmb->next;
   }//end loop over meshblocks
-  EK = 0.0;
-  EPot = 0.0;
-  EI = 0.0;
-  EK_star = 0.0;
-  EPot_star = 0.0;
-  EI_star = 0.0;
-  M_star = 0.0;
-  mr1 = 0.0;
-  mr12 = 0.0;
-  Lz_star = 0.0;
-  Eorb = 0.0;
-  mb = 0.0;
-  mu = 0.0;
-
-
+ 
   
 #ifdef MPI_PARALLEL
   // sum over all ranks
