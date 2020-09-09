@@ -1612,7 +1612,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   M_star += m1;
   mr1 += m1;
   mr12 += m1;
-  Epot -= GM1*m2/d12;
+  EPot -= GM1*m2/d12;
 
   // calculate the particle angular momenta
   Real r1[3], r2[3], p1[3], p2[3], r1xp1[3], r2xp2[3];
