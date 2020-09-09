@@ -1854,5 +1854,5 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]){
 
 
 bool instar(Real den, Real r){
-  return ((den<1.e-4) & (r<2))
+  return ((den<1.e-4) & (r<2));
 }
