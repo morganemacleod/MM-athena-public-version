@@ -75,7 +75,7 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
-			     Real &EK, Real &EPot, Real &EI,
+			     Real &EK, Real &EPot, Real &EI,Real &Edo,
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
 			     Real &M_star, Real &mr1, Real &mr12,
 			     Real &mb, Real &mu,
@@ -103,7 +103,7 @@ Real xi[3], vi[3], agas1i[3], agas2i[3]; // cartesian positions/vels of the seco
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xcom_star[3], vcom_star[3]; // cartesian pos/vel of the COM of the star
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
-Real EK, EPot, EI, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb; // diagnostic output
+Real EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb; // diagnostic output
 
 Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelope
 
@@ -884,7 +884,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   if(time >= trackfile_next_time || user_force_output ){
     SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
     SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, lp, lg, ldo,
-			    EK, EPot, EI, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu,
+			    EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu,
 			    Eorb, Lz_star, Lz_orb);
     WritePMTrackfile(pblock->pmy_mesh,pin);
   }
@@ -949,6 +949,7 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"EK                  ");
       fprintf(pfile,"EPot                ");
       fprintf(pfile,"EI                  ");
+      fprintf(pfile,"Edo                 ");
       fprintf(pfile,"EK_star             ");
       fprintf(pfile,"EPot_star           ");
       fprintf(pfile,"EI_star             ");
@@ -1000,6 +1001,7 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",EK);
     fprintf(pfile,"%20.6e",EPot);
     fprintf(pfile,"%20.6e",EI);
+    fprintf(pfile,"%20.6e",Edo);
     fprintf(pfile,"%20.6e",EK_star);
     fprintf(pfile,"%20.6e",EPot_star);
     fprintf(pfile,"%20.6e",EI_star);
@@ -1387,7 +1389,7 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
-			     Real &EK, Real &EPot, Real &EI,
+			     Real &EK, Real &EPot, Real &EI,Real &Edo,
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
 			     Real &M_star, Real &mr1, Real &mr12,
 			     Real &mb, Real &mu,
@@ -1403,6 +1405,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   EK = 0.0;
   EPot = 0.0;
   EI = 0.0;
+  Edo = 0.0;
   EK_star = 0.0;
   EPot_star = 0.0;
   EI_star = 0.0;
@@ -1499,6 +1502,12 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	    for (int ii = 0; ii < 3; ii++){
 	      ldo[ii] += rxpd[ii];
 	    }
+	    // energy flux (KE + TE)
+	    Edo += 0.5*md*(SQR(vgas[0] - vcom[0])
+			   +SQR(vgas[1] - vcom[1])
+			   +SQR(vgas[2] - vcom[2]));
+	    Edo += md*pmb->phydro->w(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
+	      
 	  } //endif
 
 
