@@ -73,10 +73,14 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 		     Real (&xcom_star)[3],Real (&vcom_star)[3],
 		     Real &mg, Real &mg_star);
 
-void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3],Real (&vi)[3],
+void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real (&xcom)[3],Real (&vcom)[3],
-			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3], Real &Eorb,
-			     Real &mb, Real &mu);
+			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
+			     Real &EK, Real &EPot, Real &EI,
+			     Real &EK_star, Real &EPot_star, Real &EI_star,
+			     Real &M_star, Real &mr1, Real &mr12,
+			     Real &mb, Real &mu,
+			     Real &Eorb, Real &Lz_star, Real &Lz_orb);
 
 void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]);
 
@@ -1604,18 +1608,31 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real (&xcom)[3],Real (&vcom)[3],
-			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3], Real &Eorb,
-			     Real &mb, Real &mu){
+			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
+			     Real &EK, Real &EPot, Real &EI,
+			     Real &EK_star, Real &EPot_star, Real &EI_star,
+			     Real &M_star, Real &mr1, Real &mr12,
+			     Real &mb, Real &mu,
+			     Real &Eorb, Real &Lz_star, Real &Lz_orb){
 
-  // NOW COMPUTE THE ANGULAR MOMENTA
+
   Real m1 = GM1/Ggrav;
   Real m2 = GM2/Ggrav;
   Real d12 = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2]);
 
  
   // start by setting accelerations / positions to zero
+  EK = 0.0;
+  EPot = 0.0;
+  EI = 0.0;
+  EK_star = 0.0;
+  EPot_star = 0.0;
+  EI_star = 0.0;
+  M_star = 0.0;
+  mr1 = 0.0;
+  mr12 = 0.0;
+  Lz_star = 0.0;
   Eorb = 0.0;
-  Real Mg = 0.0;
   mb = 0.0;
   mu = 0.0;
   for (int ii = 0; ii < 3; ii++){
@@ -1707,22 +1724,29 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  } //endif
 
 
-	  // enclosed mass (within current orbital separation)
-	  if(r<d12){
-	    Mg += dm;
+	  // enclosed mass within different conditions
+	  bool instar = (phyd->u(IDN,k,j,i) > 1.e-4) & (r<2)
+	  if(instar==true){
+	    M_star += dm;
+	  }
+	  if(r<1.0){
+	    mr1 += dm;
+	  }
+	  if(r<1.2){
+	    mr12 += dm;
 	  }
 
-
-	  // compute bound and unbound masses based on bernoulli param
+	  // energies
 	  Real d2 = std::sqrt(SQR(x-xi[0]) +
 			      SQR(y-xi[1]) +
 			      SQR(z-xi[2]) );
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc, log10(r), NGRAV);
 	  Real h = gamma_gas * pmb->phydro->w(IPR,k,j,i)/((gamma_gas-1.0)*pmb->phydro->u(IDN,k,j,i));
-	  Real epot = -GMenc1/r - GM2*pspline(d2,rsoft2);
+	  Real epot = -GMenc1*pmb->pcoord->coord_src1_i_(i) - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
 	  Real bern = h+ek+epot;
-	  if( phyd->u(IDN,k,j,i)<1.e-4 ) {
+	  // bound/unbound mass outside of the star
+	  if (instar == false ) {
 	    if (bern < 0.0){
 	      mb += dm;
 	    }else{
@@ -1730,38 +1754,100 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	    }
 	  }
 	  
-			 
-	    
-	    
+	  // intertial frame energies
+	  EK += ek*dm;
+	  EPot += epot*dm;
+	  EI += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
+			 0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+			      + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
+
+	  // stellar frame energy / angular momentum
+	  if(instar == true){
+	    EK_star += vol(i)*0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+				   + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i);
+	    EI_star += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
+				0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+				     + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
+	    Epot_star += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
+
+	    Lz_star += pmb->phydro->u(IM3,k,j,i)*vol(i)*r*sin_th;
+	  }
+	  
+	  	    
 	}
       }
     }//end loop over cells
     pmb=pmb->next;
   }//end loop over meshblocks
+  EK = 0.0;
+  EPot = 0.0;
+  EI = 0.0;
+  EK_star = 0.0;
+  EPot_star = 0.0;
+  EI_star = 0.0;
+  M_star = 0.0;
+  mr1 = 0.0;
+  mr12 = 0.0;
+  Lz_star = 0.0;
+  Eorb = 0.0;
+  mb = 0.0;
+  mu = 0.0;
 
+
+  
 #ifdef MPI_PARALLEL
   // sum over all ranks
   if (Globals::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, lg, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, ldo, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(MPI_IN_PLACE, &Mg, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EK, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EPot, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EI, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EK_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EPot_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EI_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &Lz_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &M_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &mr1, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &mr12, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &mb, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &mu, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   } else {
     MPI_Reduce(lg,lg,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(ldo,ldo,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(&Mg,&Mg,1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(&mb,&mb,1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-    MPI_Reduce(&mu,&mu,1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EK, &EK, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EPot, &EPot, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EI, &EI, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EK_star, &EK_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EPot_star, &EPot_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EI_star, &EI_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&Lz_star, &Lz_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&M_star, &M_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&mr1, &mr1, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&mr12, &mr12, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&mb, &mb, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&mu, &mu, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   }
 
   MPI_Bcast(lg,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(ldo,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(&Mg,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EK,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EPot,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EI,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EK_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EPot_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EI_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&M_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&Lz_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&mr1,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&mr12,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&mb,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&mu,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
 
+  M_star += m1;
+  mr1 += m1;
+  mr12 += m1;
 
   // calculate the particle angular momenta
   Real r1[3], r2[3], p1[3], p2[3], r1xp1[3], r2xp2[3];
@@ -1782,10 +1868,12 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   }
 
 
-  // calculate the orbital energy (approximate, I think)
-  Real v1_sq = vcom[0]*vcom[0] + vcom[1]*vcom[1] + vcom[2]*vcom[2];
+  // calculate the orbital energy and angular momenta
+  Real v1_sq = SQR(vcom_star[0]-vcom[0]) + SQR(vcom_star[1]-vcom[1]) + SQR(vcom_star[2]-vcom[2]);
   Real v2_sq = SQR(vi[0]-vcom[0]) + SQR(vi[1]-vcom[1]) + SQR(vi[2]-vcom[2]);
-  Eorb = 0.5*(m1+Mg)*v1_sq + 0.5*m2*v2_sq - Ggrav*(m1+Mg)*m2/d12; 
+  Eorb = 0.5*M_star*v1_sq + 0.5*m2*v2_sq - Ggrav*M_star*m2/d12;
+  Real Lz_1 = M_star*(xcom_star[0]*(vcom_star[1]-vcom[1]) - xcom_star[1]*(vcom_star[0]-vcom[0]));
+  Lz_orb = Lz_1 + lp[2];
 
   
 }
