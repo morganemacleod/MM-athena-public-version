@@ -69,13 +69,12 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
 Real GetGM2factor(Real time);
 
 void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-		     Real (&xgcom)[3],Real (&vgcom)[3],
 		     Real (&xcom)[3],Real (&vcom)[3],
-		     Real &mg);
+		     Real (&xcom_star)[3],Real (&vcom_star)[3],
+		     Real &mg, Real &mg_star);
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3],Real (&vi)[3],
-				     Real (&xgcom)[3],Real (&vgcom)[3],
-				     Real (&xcom)[3],Real (&vcom)[3],
+			     Real (&xcom)[3],Real (&vcom)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3], Real &Eorb,
 			     Real &mb, Real &mu);
 
@@ -110,7 +109,7 @@ int n_particle_substeps; // substepping of particle integration
 
 Real xi[3], vi[3], agas1i[3], agas2i[3]; // cartesian positions/vels of the secondary object, gas->particle acceleration
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
-Real xgcom[3], vgcom[3]; // cartesian pos/vel of the COM of the gas
+Real xcom_star[3], vcom_star[3]; // cartesian pos/vel of the COM of the star
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
 Real Eorb; // diagnostic output
 Real mb,mu; // masses of bound/unbound gas outside r=1 for diagnostic output
@@ -1001,7 +1000,7 @@ void MeshBlock::UserWorkInLoop(void)
 void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   Real ai[3];
-  Real mg;
+  Real mg,mg_star;
   
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
   // (NOTE: DOESN'T WORK WITH RESTARTS)
@@ -1022,7 +1021,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       Real sep,vel,dt_pre_integrator;
       int n_steps_pre_integrator;
 
-      SumComPosVel(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, mg);
+      SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
       //Real GMenv = Ggrav*mg;
       Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
 
@@ -1136,8 +1135,8 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // write the output to the trackfile
   if(time >= trackfile_next_time || user_force_output ){
-    SumComPosVel(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, mg);
-    SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, lp, lg, ldo, Eorb,mb,mu);
+    SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+    SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, xcom, vcom, lp, lg, ldo, Eorb,mb,mu);
     WritePMTrackfile(pblock->pmy_mesh,pin);
   }
 
@@ -1461,18 +1460,22 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
 
 
 void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-				     Real (&xgcom)[3],Real (&vgcom)[3],
-				     Real (&xcom)[3],Real (&vcom)[3],
-				     Real &mg){
+		  Real (&xcom)[3],Real (&vcom)[3],
+		  Real (&xcom_star)[3],Real (&vcom_star)[3],
+		  Real &mg, Real &mg_star){
 
    mg = 0.0;
    Real m1 = GM1/Ggrav;
    Real m2 = GM2/Ggrav;
+
+   Real xgcom[3], vgcom[3], xgcom_star[3], vgcom_star[3];
   
   // start by setting accelerations / positions to zero
   for (int ii = 0; ii < 3; ii++){
     xgcom[ii] = 0.0;
     vgcom[ii] = 0.0;
+    xgcom_star[ii] = 0.0;
+    vgcom_star[ii] = 0.0;
   }
   
   MeshBlock *pmb=pm->pblock;
@@ -1534,6 +1537,19 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  vgcom[1] += dm*vgas[1];
 	  vgcom[2] += dm*vgas[2];
 
+	  // do the summation (within the star)
+	  if( (phyd->u(IDN,k,j,i)>1.e-4) & (r<2) ){
+	    mg_star += dm;
+	    
+	    xgcom_star[0] += dm*x;
+	    xgcom_star[1] += dm*y;
+	    xgcom_star[2] += dm*z;
+
+	    vgcom_star[0] += dm*vgas[0];
+	    vgcom_star[1] += dm*vgas[1];
+	    vgcom_star[2] += dm*vgas[2];
+	  }
+
 	  
 	}
       }
@@ -1545,29 +1561,41 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   // sum over all ranks
   if (Globals::my_rank == 0) {
     MPI_Reduce(MPI_IN_PLACE, &mg, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &mg_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, xgcom, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, vgcom, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, xgcom_star, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, vgcom_star, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   } else {
     MPI_Reduce(&mg,&mg,1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&mg_star,&mg_star,1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(xgcom,xgcom,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(vgcom,vgcom,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(xgcom_star,xgcom_star,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(vgcom_star,vgcom_star,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   }
 
   MPI_Bcast(&mg,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(xgcom,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(vgcom,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(xgcom_star,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(vgcom_star,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
 
   // normalize to the total mass
   for (int ii = 0; ii < 3; ii++){
     xgcom[ii] /= mg;
     vgcom[ii] /= mg;
+    xgcom_star[ii] /= mg_star;
+    vgcom_star[ii] /= mg_star;    
   }
   
   // FINISH CALC OF COM
   for (int ii = 0; ii < 3; ii++){
     xcom[ii] = (xi[ii]*m2 + xgcom[ii]*mg)/(m1+m2+mg);
-    vcom[ii] = (vi[ii]*m2 + vgcom[ii]*mg)/(m1+m2+mg); 
+    vcom[ii] = (vi[ii]*m2 + vgcom[ii]*mg)/(m1+m2+mg);
+    xcom_star[ii] = xgcom_star[ii]*mg_star/(m1+mg_star);
+    vcom_star[ii] = vgcom_star[ii]*mg_star/(m1+mg_star); 
   }
 
 }
@@ -1575,8 +1603,7 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 
 void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-				     Real (&xgcom)[3],Real (&vgcom)[3],
-				     Real (&xcom)[3],Real (&vcom)[3],
+			     Real (&xcom)[3],Real (&vcom)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3], Real &Eorb,
 			     Real &mb, Real &mu){
 
