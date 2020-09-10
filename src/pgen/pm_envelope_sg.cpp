@@ -1325,7 +1325,7 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  vgcom[2] += dm*vgas[2];
 
 	  // do the summation (within the star)
-	  if( instar(phyd->u(IDN,k,j,i), r ) ){
+	  if( instar(phyd->u(IDN,k,j,i), r )==true ){
 	    mg_star += dm;
 	    
 	    xgcom_star[0] += dm*x;
@@ -1514,7 +1514,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 
 
 	  // enclosed mass within different conditions
-	  if(instar(phyd->u(IDN,k,j,i),r)){
+	  if(instar(phyd->u(IDN,k,j,i),r)==true){
 	    M_star += dm;
 	  }
 	  if(r<1.0){
@@ -1550,7 +1550,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			      + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
 
 	  // stellar frame energy / angular momentum
-	  if(instar(phyd->u(IDN,k,j,i),r) ){
+	  if(instar(phyd->u(IDN,k,j,i),r)==true ){
 	    EK_star += vol(i)*0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
 				   + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i);
 	    EI_star += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
@@ -1854,5 +1854,5 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]){
 
 
 bool instar(Real den, Real r){
-  return ((den<1.e-4) & (r<2));
+  return ((den>1.e-4) & (r<2));
 }
