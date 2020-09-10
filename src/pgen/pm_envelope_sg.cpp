@@ -1577,6 +1577,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(MPI_IN_PLACE, &EK, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EPot, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EI, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &Edo, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EK_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EPot_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EI_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
@@ -1592,6 +1593,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(&EK, &EK, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EPot, &EPot, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EI, &EI, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&Edo, &Edo, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EK_star, &EK_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EPot_star, &EPot_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EI_star, &EI_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
@@ -1608,6 +1610,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   MPI_Bcast(&EK,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EPot,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EI,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&Edo,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EK_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EPot_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EI_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
