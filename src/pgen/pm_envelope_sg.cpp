@@ -1418,6 +1418,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   Eorb = 0.0;
   mb = 0.0;
   mu = 0.0;
+  Lz_orb = 0.0;
   for (int ii = 0; ii < 3; ii++){
     lg[ii]  = 0.0;
     lp[ii]  = 0.0;
@@ -1652,7 +1653,8 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   EK += 0.5*m1*(SQR(vcom[0]) + SQR(vcom[1]) + SQR(vcom[2]));
   EK += 0.5*m2*v2_sq;
   Eorb = 0.5*M_star*v1_sq + 0.5*m2*v2_sq - Ggrav*M_star*m2/d12;
-  Real Lz_1 = M_star*(xcom_star[0]*(vcom_star[1]-vcom[1]) - xcom_star[1]*(vcom_star[0]-vcom[0]));
+  Real Lz_1 = M_star*((xcom_star[0]-xcom[0])*(vcom_star[1]-vcom[1])
+		      -(xcom_star[1]-xcom[1])*(vcom_star[0]-vcom[0]));
   Lz_orb = Lz_1 + lp[2];
 
   
