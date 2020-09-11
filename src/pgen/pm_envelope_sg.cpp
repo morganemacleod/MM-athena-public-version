@@ -1197,15 +1197,15 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
 	    dAvec[2] = dA*(z/r);
 
 	    // pressure terms (surface force/m1)
-	    ag1i[0] +=  -phyd->w(IPR,k,j,i)*dAvec[0];
-	    ag1i[1] +=  -phyd->w(IPR,k,j,i)*dAvec[1];
-	    ag1i[2] +=  -phyd->w(IPR,k,j,i)*dAvec[2];
+	    ag1i[0] +=  -phyd->w(IPR,k,j,i)*dAvec[0]/m1;
+	    ag1i[1] +=  -phyd->w(IPR,k,j,i)*dAvec[1]/m1;
+	    ag1i[2] +=  -phyd->w(IPR,k,j,i)*dAvec[2]/m1;
 
 	    // momentum flux terms
 	    Real dAv = vgas[0]*dAvec[0] + vgas[1]*dAvec[1] + vgas[2]*dAvec[2];
-	    ag1i[0] += phyd->u(IDN,k,j,i)*dAv*vgas[0];
-	    ag1i[1] += phyd->u(IDN,k,j,i)*dAv*vgas[1];
-	    ag1i[2] += phyd->u(IDN,k,j,i)*dAv*vgas[2];
+	    ag1i[0] += phyd->u(IDN,k,j,i)*dAv*vgas[0]/m1;
+	    ag1i[1] += phyd->u(IDN,k,j,i)*dAv*vgas[1]/m1;
+	    ag1i[2] += phyd->u(IDN,k,j,i)*dAv*vgas[2]/m1;
 
 	  }
 
