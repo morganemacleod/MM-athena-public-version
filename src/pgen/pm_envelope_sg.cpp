@@ -130,6 +130,8 @@ Real Omega_orb_fixed,sma_fixed;
 Real output_next_sep,dsep_output; // controling user forced output (set with dt=999.)
 
 int update_grav_every;
+bool damp_particle_1;
+Real tau_damp_particle_1;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -180,7 +182,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
-    
+
+  // an option to damp the relative motion of particle 1 and the stellar COM
+  damp_particle_1 = GetOrAddBoolean("problem","damp_particle_1",false);
+  tau_damp_particle_1 = GetOrAddReal("problem","tau_damp_particle_1",1.0);
   
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -878,6 +883,9 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
+    if(damp_particle_1 == true){
+      SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+    }
     SumGasOnParticleAccels(pblock->pmy_mesh, xi,agas1i,agas2i);
   }
   
@@ -1243,6 +1251,13 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
   MPI_Bcast(ag2i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
 
+  // add a damping to particle 1
+  if(damp_particle_1==true){
+    for (int ii = 0; ii < 3; ii++){
+      ag1i[ii] -= vcom_star[ii] / tau_damp_particle_1;
+    }
+  }
+  
     
 }
 
