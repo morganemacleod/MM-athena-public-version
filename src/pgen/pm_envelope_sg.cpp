@@ -184,8 +184,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
 
   // an option to damp the relative motion of particle 1 and the stellar COM
-  damp_particle_1 = GetOrAddBoolean("problem","damp_particle_1",false);
-  tau_damp_particle_1 = GetOrAddReal("problem","tau_damp_particle_1",1.0);
+  damp_particle_1 = pin->GetOrAddBoolean("problem","damp_particle_1",false);
+  tau_damp_particle_1 = pin->GetOrAddReal("problem","tau_damp_particle_1",1.0);
   
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
