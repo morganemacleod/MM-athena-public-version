@@ -1251,12 +1251,12 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
   MPI_Bcast(ag2i,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
   // add a damping to particle 1
-  //if(damp_particle_1==true){
-  //  for (int ii = 0; ii < 3; ii++){
-  //    ag1i[ii] -= vcom_star[ii] / tau_damp_particle_1;
-  //  }
-  //}
-  //std::cout<<"accels:"<<vcom[0]<<" "<<vcom_star[0]<<"\n";
+  if(damp_particle_1==true){
+    for (int ii = 0; ii < 3; ii++){
+      ag1i[ii] -= vcom_star[ii] / tau_damp_particle_1;
+    }
+  }
+  std::cout<<"accels:"<<vcom[0]<<" "<<vcom_star[0]<<"\n";
     
 }
 
