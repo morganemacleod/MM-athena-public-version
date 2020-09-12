@@ -1257,6 +1257,7 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
       ag1i[ii] -= vcom_star[ii] / tau_damp_particle_1;
     }
   }
+  std::cout<<"accels:"<<ag1i[0]<<ag1i[1]<<ag1i[2]<<"\n";
   
     
 }
