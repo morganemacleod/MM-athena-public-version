@@ -1256,7 +1256,7 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
   //    ag1i[ii] -= vcom_star[ii] / tau_damp_particle_1;
   //  }
   //}
-  std::cout<<"accels:"<<vcom[0]<<" "<<vcom_star[0]<<"\n";
+  //std::cout<<"accels:"<<vcom[0]<<" "<<vcom_star[0]<<"\n";
     
 }
 
@@ -1400,6 +1400,13 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     vcom_star[ii] = vgcom_star[ii]*mg_star/(m1+mg_star); 
   }
 
+#ifdef MPI_PARALLEL
+  MPI_Bcast(xcom,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(vcom,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(xcom_star,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(vcom_star,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+#endif
+  
 }
 
 
