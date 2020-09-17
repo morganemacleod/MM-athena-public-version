@@ -52,13 +52,13 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
-void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-void ParticleAccelsPreInt(Real GMenv, Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-void SumGasOnParticleAccels(Mesh *pm, Real (&xia)[3],Real (&ag1i)[3], Real (&ag2i)[3]);
+void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]);
+void ParticleAccelsPreInt(Real GMenv, Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]);
+void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3], Real (&ag2i)[3]);
 
-void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
-void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
+void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]);
+void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]);
+void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]);
 
 int RefinementCondition(MeshBlock *pmb);
 
@@ -749,7 +749,7 @@ void MeshBlock::UserWorkInLoop(void)
 
 void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
-  Real ai[3];
+  Real ai[3],acom[3];
   Real mg,mg_star;
   
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
@@ -763,8 +763,8 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       SumGasOnParticleAccels(pblock->pmy_mesh, xi,agas1i,agas2i);
     }
 
-    ParticleAccels(xi,vi,ai);
-    kick(-0.5*dt,xi,vi,ai);
+    ParticleAccels(xi,vi,ai,xcom,vcom,acom);
+    kick(-0.5*dt,xi,vi,ai,xcom,vcom,acom);
 
     // Integrate from apocenter to separation_start
     if( do_pre_integrate ) {
@@ -785,9 +785,9 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 	if (sep<separation_start) break;
 	
 	// add the particle acceleration to ai
-	ParticleAccelsPreInt(GMenv,xi,vi,ai);
+	ParticleAccelsPreInt(GMenv,xi,vi,ai,xcom,vcom,acom);
 	// advance the particle
-	particle_step(dt_pre_integrator,xi,vi,ai);
+	particle_step(dt_pre_integrator,xi,vi,ai,xcom,vcom,acom);
       }
 
       if (Globals::my_rank==0){
@@ -818,9 +818,9 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     }else{
       for (int ii=1; ii<=n_particle_substeps; ii++) {
 	// add the particle acceleration to ai
-	ParticleAccels(xi,vi,ai);
+	ParticleAccels(xi,vi,ai,xcom,vcom,acom);
 	// advance the particle
-	particle_step(dt/n_particle_substeps,xi,vi,ai);
+	particle_step(dt/n_particle_substeps,xi,vi,ai,xcom,vcom,acom);
       }
     }
   }
@@ -940,6 +940,12 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"vxcom               ");
       fprintf(pfile,"vycom               ");
       fprintf(pfile,"vzcom               ");
+      fprintf(pfile,"xcomSum             ");
+      fprintf(pfile,"ycomSum             ");
+      fprintf(pfile,"zcomSum             ");
+      fprintf(pfile,"vxcomSum            ");
+      fprintf(pfile,"vycomSum            ");
+      fprintf(pfile,"vzcomSum            ");
       fprintf(pfile,"xcom_star           ");
       fprintf(pfile,"ycom_star           ");
       fprintf(pfile,"zcom_star           ");
@@ -992,6 +998,12 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",vcom[0]);
     fprintf(pfile,"%20.6e",vcom[1]);
     fprintf(pfile,"%20.6e",vcom[2]);
+    fprintf(pfile,"%20.6e",xcomSum[0]);
+    fprintf(pfile,"%20.6e",xcomSum[1]);
+    fprintf(pfile,"%20.6e",xcomSum[2]);
+    fprintf(pfile,"%20.6e",vcomSum[0]);
+    fprintf(pfile,"%20.6e",vcomSum[1]);
+    fprintf(pfile,"%20.6e",vcomSum[2]);
     fprintf(pfile,"%20.6e",xcom_star[0]);
     fprintf(pfile,"%20.6e",xcom_star[1]);
     fprintf(pfile,"%20.6e",xcom_star[2]);
@@ -1034,90 +1046,110 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
 
 
 
-void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
+void particle_step(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
+		   Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]){
   // Leapfrog algorithm (KDK)
 
   // kick a full step
-  kick(dt,xi,vi,ai);
+  kick(dt,xi,vi,ai,xcom,vcom,acom);
 
   // drift a full step
-  drift(dt,xi,vi,ai);
+  drift(dt,xi,vi,ai,xcom,vcom,acom);
   
 }
 
 // kick the velocities dt using the accelerations given in ai
-void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
+void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
+	  Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]){
   for (int i = 0; i < 3; i++){
-    vi[i] += dt*ai[i];
+    vi[i]   += dt*ai[i];
+    vcom[i] += dt*acom[i];
   }
 }
 
 // drift the velocities dt using the velocities given in vi
-void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
+void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
+	   Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]){
   for (int i = 0; i < 3; i++){
-    xi[i] += dt*vi[i];
+    xi[i]   += dt*vi[i];
+    xcom[i] += dt*vcom[i];
   }
 }
 
-void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
+void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
+		    Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]){
 
   Real d = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2]);
 
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
     ai[i] = - GM1/pow(d,3) * xi[i] - GM2/pow(d,3) * xi[i];
+    acom[i] = GM2/pow(d,3) * xi[i];
   } 
   
   // IF WE'RE IN A ROTATING FRAME
   if(corotating_frame == 1){
     Real Omega_x_r[3],Omega_x_Omega_x_r[3], Omega_x_v[3];
+    Real Omega_x_rcom[3],Omega_x_Omega_x_rcom[3], Omega_x_vcom[3];
  
     // compute cross products 
     cross(Omega,xi,Omega_x_r);
     cross(Omega,Omega_x_r,Omega_x_Omega_x_r);
-    
     cross(Omega,vi,Omega_x_v);
+    cross(Omega,xcom,Omega_x_rcom);
+    cross(Omega,Omega_x_rcom,Omega_x_Omega_x_rcom);
+    cross(Omega,vcom,Omega_x_vcom);
   
     // fill in the accelerations for the rotating frame
     for (int i = 0; i < 3; i++){
       ai[i] += -Omega_x_Omega_x_r[i];
       ai[i] += -2.0*Omega_x_v[i];
+      acom[i] += -Omega_x_Omega_x_rcom[i];
+      acom[i] += -2.0*Omega_x_vcom[i];  
     }
   }
 
   // add the gas acceleration to ai
   if(include_gas_backreaction == 1){
     for (int i = 0; i < 3; i++){
-      ai[i] += -agas1i[i]+agas2i[i];
+      ai[i]   += -agas1i[i]+agas2i[i];
+      acom[i] += -agas1i[i];
     }
   }
 
 }
 
 
-void ParticleAccelsPreInt(Real GMenv, Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
+void ParticleAccelsPreInt(Real GMenv, Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
+			  Real (&xcom)[3],Real (&vcom)[3],Real (&acom)[3]){
 
   Real d = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2]);
 
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
     ai[i] = - (GM1+GMenv)/pow(d,3) * xi[i] - GM2/pow(d,3) * xi[i];
+    acom[i] = GM2/pow(d,3) * xi[i];
   } 
   
   // IF WE'RE IN A ROTATING FRAME
   if(corotating_frame == 1){
     Real Omega_x_r[3],Omega_x_Omega_x_r[3], Omega_x_v[3];
+    Real Omega_x_rcom[3],Omega_x_Omega_x_rcom[3], Omega_x_vcom[3];
  
     // compute cross products 
     cross(Omega,xi,Omega_x_r);
     cross(Omega,Omega_x_r,Omega_x_Omega_x_r);
-    
     cross(Omega,vi,Omega_x_v);
+    cross(Omega,xcom,Omega_x_rcom);
+    cross(Omega,Omega_x_rcom,Omega_x_Omega_x_rcom);
+    cross(Omega,vcom,Omega_x_vcom);
   
     // fill in the accelerations for the rotating frame
     for (int i = 0; i < 3; i++){
       ai[i] += -Omega_x_Omega_x_r[i];
       ai[i] += -2.0*Omega_x_v[i];
+      acom[i] += -Omega_x_Omega_x_rcom[i];
+      acom[i] += -2.0*Omega_x_vcom[i];  
     }
   }
 
