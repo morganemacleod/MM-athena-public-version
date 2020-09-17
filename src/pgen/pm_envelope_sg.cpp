@@ -69,7 +69,7 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
 Real GetGM2factor(Real time);
 
 void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-		     Real (&xcom)[3],Real (&vcom)[3],
+		     Real (&xcomSum)[3],Real (&vcomSum)[3],
 		     Real (&xcom_star)[3],Real (&vcom_star)[3],
 		     Real &mg, Real &mg_star);
 
@@ -102,6 +102,7 @@ int  include_gas_backreaction, corotating_frame; // flags for output, gas backre
 int n_particle_substeps; // substepping of particle integration
 
 Real xi[3], vi[3], agas1i[3], agas2i[3]; // cartesian positions/vels of the secondary object, gas->particle acceleration
+Real xcomSum[3], vcomSum[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xcom_star[3], vcom_star[3]; // cartesian pos/vel of the COM of the star
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
@@ -130,8 +131,7 @@ Real Omega_orb_fixed,sma_fixed;
 Real output_next_sep,dsep_output; // controling user forced output (set with dt=999.)
 
 int update_grav_every;
-bool damp_particle_1;
-Real tau_damp_particle_1;
+
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -183,10 +183,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
 
-  // an option to damp the relative motion of particle 1 and the stellar COM
-  damp_particle_1 = pin->GetOrAddBoolean("problem","damp_particle_1",false);
-  tau_damp_particle_1 = pin->GetOrAddReal("problem","tau_damp_particle_1",1.0);
-  
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
   Real rmax = pin->GetOrAddReal("mesh","x1max",0.0);
@@ -775,7 +771,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       Real sep,vel,dt_pre_integrator;
       int n_steps_pre_integrator;
 
-      SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+      SumComPosVel(pblock->pmy_mesh, xi, vi, xcomSum, vcomSum, xcom_star, vcom_star, mg,mg_star);
       //Real GMenv = Ggrav*mg;
       Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
 
@@ -883,16 +879,13 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
-    if(damp_particle_1 == true){
-      SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
-    }
     SumGasOnParticleAccels(pblock->pmy_mesh, xi,agas1i,agas2i);
   }
   
   
   // write the output to the trackfile
   if(time >= trackfile_next_time || user_force_output ){
-    SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+    SumComPosVel(pblock->pmy_mesh, xi, vi, xcomSum, vcomSum, xcom_star, vcom_star, mg,mg_star);
     SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, lp, lg, ldo,
 			    EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu,
 			    Eorb, Lz_star, Lz_orb);
@@ -1237,15 +1230,6 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
   }//end loop over meshblocks
 
 
-  // add a damping to particle 1
-  if(damp_particle_1==true){
-    for (int ii = 0; ii < 3; ii++){
-      ag1i[ii] = 0.0; //-= vcom_star[ii] / tau_damp_particle_1;
-    }
-  }
-  //std::cout<<"accels:"<<vcom[0]<<" "<<vcom_star[0]<<"\n";
-
-
 #ifdef MPI_PARALLEL
   // sum over all ranks
   if (Globals::my_rank == 0) {
@@ -1265,7 +1249,7 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
 
 
 void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-		  Real (&xcom)[3],Real (&vcom)[3],
+		  Real (&xcomSum)[3],Real (&vcomSum)[3],
 		  Real (&xcom_star)[3],Real (&vcom_star)[3],
 		  Real &mg, Real &mg_star){
 
@@ -1397,15 +1381,15 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   
   // FINISH CALC OF COM
   for (int ii = 0; ii < 3; ii++){
-    xcom[ii] = (xi[ii]*m2 + xgcom[ii]*mg)/(m1+m2+mg);
-    vcom[ii] = (vi[ii]*m2 + vgcom[ii]*mg)/(m1+m2+mg);
+    xcomSum[ii] = (xi[ii]*m2 + xgcom[ii]*mg)/(m1+m2+mg);
+    vcomSum[ii] = (vi[ii]*m2 + vgcom[ii]*mg)/(m1+m2+mg);
     xcom_star[ii] = xgcom_star[ii]*mg_star/(m1+mg_star);
     vcom_star[ii] = vgcom_star[ii]*mg_star/(m1+mg_star); 
   }
 
 #ifdef MPI_PARALLEL
-  MPI_Bcast(xcom,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-  MPI_Bcast(vcom,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(xcomSum,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(vcomSum,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(xcom_star,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(vcom_star,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
 #endif
