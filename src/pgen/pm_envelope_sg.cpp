@@ -196,10 +196,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   
 
    // allocate MESH data for the particle pos/vel, Omega frame
-  AllocateRealUserMeshDataField(3);
+  AllocateRealUserMeshDataField(5);
   ruser_mesh_data[0].NewAthenaArray(3);
   ruser_mesh_data[1].NewAthenaArray(3);
   ruser_mesh_data[2].NewAthenaArray(3);
+  ruser_mesh_data[3].NewAthenaArray(3);
+  ruser_mesh_data[4].NewAthenaArray(3);
   
   
   // enroll the BCs
@@ -237,6 +239,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // set the inner point mass based on excised mass
   Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin, NARRAY );
   GM1 = Ggrav*menc_rin;
+  Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
 
 
   // allocate the enclosed mass profile
@@ -248,51 +251,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     menc[i] = Interpolate1DArrayEven(rad,menc_init, pow(10,logr[i]), NGRAV );
   }
   
-  
-  // need to do a 3D integral to get the gravitational acceleration
-  int ntp=300;
-  Real pi = 3.14159265359;
-  Real dr = (1.0 - rmin)/ntp;
-  Real dth = (thmax-thmin)/ntp;
-  Real dph = 2*pi/ntp;
-  
-  // current position of the secondary
-  Real x_2 = sma;
-  Real y_2 = 0;
-  Real z_2 = 0;
-  
-  // loop over the artifical domain and do the integral of the initial condition
-  Real accel = 0;
-  Real GMenv = 0;
-  for(int i=0; i<ntp; i++){
-    for(int j=0; j<ntp; j++){
-      for(int k=0; k<ntp; k++){
-	Real r  = rmin + dr/2 + i*dr;
-	Real th = thmin + dth/2. + j*dth;
-	Real ph = -pi + dph/2. + k*dph;
-	
-	// get local cartesian           
-	Real x = r*sin(th)*cos(ph);
-	Real y = r*sin(th)*sin(ph);
-	Real z = r*cos(th);
-	
-	Real d2 = sqrt(pow(x-x_2, 2) +
-		       pow(y-y_2, 2) +
-		       pow(z-z_2, 2) );
-	
-	// mass element
-	Real den = Interpolate1DArrayEven(rad,rho, r , NARRAY);
-	Real dm = r*r*sin(th)*dr*dth*dph * den;
-	
-	//mass
-	GMenv += Ggrav*dm;
-	
-	// gravitational accels in cartesian coordinates  
-	accel += -Ggrav*dm*fspline(d2,rsoft2) * (x-x_2);
-	
-      }
-    }
-  }
+
     
 
   //ONLY enter ICs loop if this isn't a restart
@@ -352,6 +311,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
       ruser_mesh_data[0](i)  = xi[i];
       ruser_mesh_data[1](i)  = vi[i];
       ruser_mesh_data[2](i)  = Omega[i];
+      ruser_mesh_data[3](i)  = xcom[i];
+      ruser_mesh_data[4](i)  = vcom[i];
     }
           
   }else{
@@ -372,7 +333,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "GM1 = "<< GM1 <<"\n";
     std::cout << "GM2 = "<< GM2 <<"\n";
     std::cout << "GMenv="<< GMenv << "\n";
-    std::cout << "GMenv/r^2, g_accel = " << GMenv/(sma*sma) << "  "<< accel << "\n";
     std::cout << "Omega_orb="<< Omega_orb << "\n";
     std::cout << "Omega_env="<< Omega_envelope << "\n";
     std::cout << "a = "<< sma <<"\n";
@@ -478,6 +438,8 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       xi[i]    = pmb->pmy_mesh->ruser_mesh_data[0](i);
       vi[i]    = pmb->pmy_mesh->ruser_mesh_data[1](i);
       Omega[i] = pmb->pmy_mesh->ruser_mesh_data[2](i);
+      xcom[i]  = pmb->pmy_mesh->ruser_mesh_data[3](i);
+      vcom[i]  = pmb->pmy_mesh->ruser_mesh_data[4](i);
     }
     // print some info
     if (Globals::my_rank==0){
@@ -485,6 +447,8 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
       std::cout <<"xi="<<xi[0]<<" "<<xi[1]<<" "<<xi[2]<<"\n";
       std::cout <<"vi="<<vi[0]<<" "<<vi[1]<<" "<<vi[2]<<"\n";
       std::cout <<"Omega="<<Omega[0]<<" "<<Omega[1]<<" "<<Omega[2]<<"\n";
+      std::cout <<"xcom="<<xcom[0]<<" "<<xcom[1]<<" "<<xcom[2]<<"\n";
+      std::cout <<"vcom="<<vcom[0]<<" "<<vcom[1]<<" "<<vcom[2]<<"\n";
     }
     is_restart=0;
   }
@@ -751,10 +715,22 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   Real ai[3],acom[3];
   Real mg,mg_star;
+
+  // initialize the COM pos/vel
+  std::cout<<ncycle<<" "<<xi[0]<<"  "<<xcom[0]<<"  "<<xcomSum[0]<<"\n";
+  
   
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
   // (NOTE: DOESN'T WORK WITH RESTARTS)
   if((ncycle==0) && (fixed_orbit==false)){
+
+
+    // initialize the COM position velocity
+    SumComPosVel(pblock->pmy_mesh, xi, vi, xcomSum, vcomSum, xcom_star, vcom_star, mg,mg_star);
+    for (int i = 0; i < 3; i++){
+      xcom[i] = xcomSum[i];
+      vcom[i] = vcomSum[i];
+    }
     
     // kick the initial conditions back a half step (v^n-1/2)
 
@@ -798,7 +774,6 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 	  SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit
 	}	
       }
-
     }
  
   } // ncycle=0, fixed_orbit = false
@@ -815,6 +790,13 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       vi[0] = sma_fixed*Omega_orb_fixed*std::sin(theta_orb);
       vi[1] = sma_fixed*Omega_orb_fixed*std::cos(theta_orb);
       vi[2] = 0.0;
+
+      SumComPosVel(pblock->pmy_mesh, xi, vi, xcomSum, vcomSum, xcom_star, vcom_star, mg,mg_star);
+      for (int i = 0; i < 3; i++){
+	xcom[i] = xcomSum[i];
+	vcom[i] = vcomSum[i];
+      }
+      
     }else{
       for (int ii=1; ii<=n_particle_substeps; ii++) {
 	// add the particle acceleration to ai
@@ -836,6 +818,8 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     ruser_mesh_data[0](i)  = xi[i];
     ruser_mesh_data[1](i)  = vi[i];
     ruser_mesh_data[2](i)  = Omega[i];
+    ruser_mesh_data[3](i)  = xcom[i];
+    ruser_mesh_data[4](i)  = vcom[i];
   }
 
   // check the separation stopping conditions
@@ -1084,7 +1068,7 @@ void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
     ai[i] = - GM1/pow(d,3) * xi[i] - GM2/pow(d,3) * xi[i];
-    acom[i] = GM2/pow(d,3) * xi[i];
+    acom[i] = - GM2/pow(d,3) * xi[i];
   } 
   
   // IF WE'RE IN A ROTATING FRAME
