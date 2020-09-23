@@ -716,10 +716,6 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   Real ai[3],acom[3];
   Real mg,mg_star;
 
-  // initialize the COM pos/vel
-  std::cout<<ncycle<<" "<<xi[0]<<"  "<<xcom[0]<<"  "<<xcomSum[0]<<"\n";
-  
-  
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
   // (NOTE: DOESN'T WORK WITH RESTARTS)
   if((ncycle==0) && (fixed_orbit==false)){
