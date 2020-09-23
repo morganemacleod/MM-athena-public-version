@@ -774,6 +774,14 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 	  SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit
 	}	
       }
+      // initialize the COM position velocity
+      SumComPosVel(pblock->pmy_mesh, xi, vi, xcomSum, vcomSum, xcom_star, vcom_star, mg,mg_star);
+      for (int i = 0; i < 3; i++){
+	xcom[i] = xcomSum[i];
+	vcom[i] = vcomSum[i];
+      }
+
+
     }
  
   } // ncycle=0, fixed_orbit = false
@@ -1112,7 +1120,7 @@ void ParticleAccelsPreInt(Real GMenv, Real (&xi)[3],Real (&vi)[3],Real (&ai)[3],
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
     ai[i] = - (GM1+GMenv)/pow(d,3) * xi[i] - GM2/pow(d,3) * xi[i];
-    acom[i] = GM2/pow(d,3) * xi[i];
+    acom[i] = - GM2/pow(d,3) * xi[i];
   } 
   
   // IF WE'RE IN A ROTATING FRAME
