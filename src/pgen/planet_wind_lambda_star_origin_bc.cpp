@@ -41,6 +41,14 @@
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
+void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
+
+void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
+
+
+
 void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
@@ -95,6 +103,8 @@ Real da,pa;
 //Real x1_min_derefine; // for AMR
 //Real threshold, dscale; // for AMR
 
+int star_mode; // setting for the stellar BC
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -123,6 +133,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   //rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
   lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
+  star_mode   = pin->GetInteger("problem","star_mode");
 
   //rho_surface_planet = pin->GetOrAddReal("problem","rho_surface_planet",1.e-15);
   lambda_planet = pin->GetOrAddReal("problem","lambda_planet",5.0);
@@ -161,6 +172,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   if(mesh_bcs[BoundaryFace::outer_x1] == GetBoundaryFlag("user")) {
     EnrollUserBoundaryFunction(BoundaryFace::outer_x1, DiodeOuterX1);
   }
+  if(mesh_bcs[BoundaryFace::inner_x1] == GetBoundaryFlag("user")) {
+    if(star_mode==1){
+      EnrollUserBoundaryFunction(BoundaryFace::inner_x1, AccreteInnerX1);
+    }
+    if(star_mode==2){
+      EnrollUserBoundaryFunction(BoundaryFace::inner_x1, WindInnerX1);
+    }
+}
 
 
   // Enroll a Source Function
@@ -403,8 +422,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vph = 0.0; //- Omega[2]*Rcyl;
 	}
 	
-	// Near star
-	if(r<sma/2){
+	// Near star, if there is a wind BC
+	if((r<sma/2) && (star_mode==2)  ){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface_star * pow((r/r_inner),-8);
@@ -924,6 +943,7 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   }
 
 
+  /*
   // copy face-centered magnetic fields into ghost zones
   if (MAGNETIC_FIELDS_ENABLED) {
     for (int k=ks; k<=ke; ++k) {
@@ -950,9 +970,52 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 	}
       }}
   }
+  */
 
   return;
 }
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void WindInnerX1()
+void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+                Real time, Real dt,
+                int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+	Real r = pco->x1v(il-i);
+	prim(IDN,k,j,il-i) = rho_surface_star;
+	prim(IVX,k,j,il-i) = 0.0;
+	prim(IVY,k,j,il-i) = 0.0;
+	prim(IVZ,k,j,il-i) = 0.0;
+	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
+      }
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void WindInnerX1()
+void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+                Real time, Real dt,
+                int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
+  
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+	prim(IDN,k,j,il-i) = prim(IDN,k,j,il);
+	prim(IVX,k,j,il-i) = std::min( prim(IVX,k,j,il), 0.0);
+	prim(IVY,k,j,il-i) = 0.0;
+	prim(IVZ,k,j,il-i) = 0.0;
+	prim(IPR,k,j,il-i) = 0.3*prim(IPR,k,j,il);
+      }
+    }
+  }
+
+}
+
 
 
 
