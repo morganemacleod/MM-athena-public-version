@@ -990,6 +990,7 @@ void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, Face
 	prim(IVY,k,j,il-i) = 0.0;
 	prim(IVZ,k,j,il-i) = 0.0;
 	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
+	pmb->pscalars->s(0,k,j,il-i) = 1.e-10*prim(IDN,k,j,il-i);
       }
     }
   }
@@ -1005,11 +1006,12 @@ void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, F
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
       for (int i=1; i<=ngh; ++i) {
-	prim(IDN,k,j,il-i) = prim(IDN,k,j,il);
+	prim(IDN,k,j,il-i) = 0.1*prim(IDN,k,j,il);
 	prim(IVX,k,j,il-i) = std::min( prim(IVX,k,j,il), 0.0);
-	prim(IVY,k,j,il-i) = 0.0;
-	prim(IVZ,k,j,il-i) = 0.0;
+	prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+	prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
 	prim(IPR,k,j,il-i) = 0.3*prim(IPR,k,j,il);
+	//pscalars->s(0,k,j,il-i) = scalar_val*phydro->u(IDN,k,j,i);
       }
     }
   }
