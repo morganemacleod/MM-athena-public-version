@@ -73,6 +73,11 @@ class PassiveScalars {
                         AthenaArray<Real> *flx_out);
   Real NewDiffusionDt();
 
+
+  // MM: phi averaging 
+  void PhiAverageScalars(AthenaArray<Real> &s_in,AthenaArray<Real> &s_out);
+  void Get_block_N_zone_avg_Scalars(MeshBlock *pmb);
+
  private:
   MeshBlock* pmy_block;
   // scratch space used to compute fluxes
@@ -99,5 +104,10 @@ class PassiveScalars {
   void AddDiffusionFluxes();
   // TODO(felker): dedpulicate these arrays and the same named ones in HydroDiffusion
   AthenaArray<Real> dx1_, dx2_, dx3_;
+
+  //MM: zone averaging
+  bool do_average_;
+  AthenaArray<int> n_avg_;
+
 };
 #endif // SCALARS_SCALARS_HPP_
