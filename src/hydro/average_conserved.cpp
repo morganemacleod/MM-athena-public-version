@@ -83,10 +83,10 @@ void Hydro::PhiAverageConserved(AthenaArray<Real> &u_in,AthenaArray<Real> &u_out
         int ke_avg = ks_avg + n_avg_(j) -1;
         for (int i=is; i<=ie; ++i) {
           Real u_k_avg[NHYDRO]={};
-          for (int k=ks_avg; k<=ke_avg; ++k) {
+	  for (int k=ks_avg; k<=ke_avg; ++k) {
             u_k_avg[IDN] += u_in(IDN,k,j,i);
             u_k_avg[IEN] += u_in(IEN,k,j,i);
-            Real phi = dphi * (k-ks_avg - (n_avg_(j)-1)/2.); // angle between the current cell and averaged cell center
+	    Real phi = dphi * (k-ks_avg - (n_avg_(j)-1)/2.); // angle between the current cell and averaged cell center
             // below physically means u_k_avg += u_in
             u_k_avg[IM1] +=   u_in(IM1,k,j,i)*(1-SQR(sin_th)*(1-cos(phi)))
                             - u_in(IM2,k,j,i)*sin_th*cos_th*(1-cos(phi))
