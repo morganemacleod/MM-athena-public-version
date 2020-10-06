@@ -62,7 +62,8 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]);
 
 void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
 
-Real mdotstar(MeshBlock *pmb, int iout);
+Real MdotMeshStar(MeshBlock *pmb, int iout);
+Real MdotMeshPlanet(MeshBlock *pmb, int iout);
 
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
@@ -189,8 +190,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   EnrollUserExplicitSourceFunction(StarPlanetWinds);
 
   // Enroll extra history output
-  AllocateUserHistoryOutput(1);
-  EnrollUserHistoryOutput(0, mdotstar, "mdotstar");
+  AllocateUserHistoryOutput(2);
+  EnrollUserHistoryOutput(0, MdotMeshPlanet, "md_m_p");
+  EnrollUserHistoryOutput(1, MdotMeshStar, "md_m_s");
 
    // Enroll AMR
   //if(adaptive==true)
@@ -599,10 +601,13 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 
 
 
-Real mdotstar(MeshBlock *pmb, int iout){
+
+
+Real MdotMeshPlanet(MeshBlock *pmb, int iout){
+  // mass flux on/off of the mesh, >0 = inflow, <0 = outflow
   Real mdot = 0.0;
   
-  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
+  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::user) {
      int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
      AthenaArray<Real> area;
      int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
@@ -610,11 +615,49 @@ Real mdotstar(MeshBlock *pmb, int iout){
   
      for(int k=ks; k<=ke; k++) {
        for(int j=js; j<=je; j++) {
-          pmb->pcoord->VolCenterFace1Area(k,j,pmb->is,pmb->ie,area);
-          mdot += area(pmb->is+10)*pmb->phydro->u(IM1,k,j,pmb->is+10); // dmdot = dA*rho*v
+          pmb->pcoord->VolCenterFace1Area(k,j,is,ie,area);
+          mdot += area(is)*pmb->phydro->u(IM1,k,j,is)*pmb->pscalars->r(0,k,j,is); // dmdot = dA*rho*v
         }
       }
     } // end if
+
+  if(pmb->pbval->block_bcs[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+     int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+     AthenaArray<Real> area;
+     int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+     area.NewAthenaArray(ncells1);
+  
+     for(int k=ks; k<=ke; k++) {
+       for(int j=js; j<=je; j++) {
+          pmb->pcoord->VolCenterFace1Area(k,j,is,ie,area);
+          mdot += -area(ie)*pmb->phydro->u(IM1,k,j,ie)*pmb->pscalars->r(0,k,j,ie); // dmdot = dA*rho*v
+        }
+      }
+    } // end if
+
+  
+  return mdot;
+}
+
+
+Real MdotMeshStar(MeshBlock *pmb, int iout){
+  // mass flux on/off of the mesh, >0 = inflow, <0 = outflow
+  Real mdot = 0.0;
+  
+  if(pmb->pbval->block_bcs[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+     int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+     AthenaArray<Real> area;
+     int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+     area.NewAthenaArray(ncells1);
+  
+     for(int k=ks; k<=ke; k++) {
+       for(int j=js; j<=je; j++) {
+          pmb->pcoord->VolCenterFace1Area(k,j,is,ie,area);
+          mdot += -area(ie)*pmb->phydro->u(IM1,k,j,ie)*pmb->pscalars->r(1,k,j,ie); // dmdot = dA*rho*v
+        }
+      }
+    } // end if
+
   
   return mdot;
 }
