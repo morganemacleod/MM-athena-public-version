@@ -105,6 +105,9 @@ Real da,pa;
 
 int star_mode; // setting for the stellar BC
 
+Real scalar_val=1.e-10;
+
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -390,8 +393,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vx,vy,vz;
 	Real vr,vth,vph;
 
-	Real scalar_val=1.e-10;
-
+	
 
 	// Near Planet
 	if(d2 <= radius_planet){
@@ -442,9 +444,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) = std::max(pres,pa)/(gamma_gas-1.0);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
-
-	pscalars->s(0,k,j,i) = scalar_val*phydro->u(IDN,k,j,i);
-
       }
     }
   } // end loop over cells
@@ -716,7 +715,6 @@ void MeshBlock::UserWorkInLoop(void) {
   }  
 
 
-  // Gravitational acceleration from orbital motion
   for (int k=ks; k<=ke; k++) {
     Real ph=pcoord->x3v(k);
     Real sin_ph = sin(ph);
@@ -769,6 +767,7 @@ void MeshBlock::UserWorkInLoop(void) {
 				       + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
 	  
 	  pscalars->s(0,k,j,i) = 1.0*rho_surface_planet; // set scalar concetration to one
+	  pscalars->s(1,k,j,i) = scalar_val*rho_surface_planet; 
 	} // within planet radius
 
 	/*
@@ -990,7 +989,8 @@ void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, Face
 	prim(IVY,k,j,il-i) = 0.0;
 	prim(IVZ,k,j,il-i) = 0.0;
 	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
-	pmb->pscalars->s(0,k,j,il-i) = 1.e-10*prim(IDN,k,j,il-i);
+	pmb->pscalars->s(0,k,j,il-i) = scalar_val*prim(IDN,k,j,il-i);
+	pmb->pscalars->s(1,k,j,il-i) = 1.0*prim(IDN,k,j,il-i);
       }
     }
   }
