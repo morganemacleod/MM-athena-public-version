@@ -39,6 +39,7 @@
 #include "../bvals/bvals.hpp"
 #include "../utils/utils.hpp"
 #include "../outputs/outputs.hpp"
+#include "../scalars/scalars.hpp"
 
 
 
@@ -79,7 +80,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
 			     Real &M_star, Real &mr1, Real &mr12,
 			     Real &mb, Real &mu,
-			     Real &Eorb, Real &Lz_star, Real &Lz_orb);
+			     Real &Eorb, Real &Lz_star, Real &Lz_orb, Real &Lz_ej);
 
 void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]);
 
@@ -106,7 +107,7 @@ Real xcomSum[3], vcomSum[3]; // cartesian pos/vel of the COM of the particle/gas
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xcom_star[3], vcom_star[3]; // cartesian pos/vel of the COM of the star
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
-Real EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb; // diagnostic output
+Real EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb, Lz_ej; // diagnostic output
 
 Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelope
 
@@ -650,6 +651,13 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
 
+	// set the scalar
+	if(r<1.0){
+	  pscalars->s(0,k,j,i) = 1.0*phydro->u(IDN,k,j,i);
+	}else{
+	  pscalars->s(0,k,j,i) = 1.0e-10*phydro->u(IDN,k,j,i);
+	}
+	
       }
     }
   } // end loop over cells
@@ -876,7 +884,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     SumComPosVel(pblock->pmy_mesh, xi, vi, xcomSum, vcomSum, xcom_star, vcom_star, mg,mg_star);
     SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, lp, lg, ldo,
 			    EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu,
-			    Eorb, Lz_star, Lz_orb);
+			    Eorb, Lz_star, Lz_orb,Lz_ej);
     WritePMTrackfile(pblock->pmy_mesh,pin);
   }
 
@@ -958,6 +966,7 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"mu                  ");
       fprintf(pfile,"Eorb                ");
       fprintf(pfile,"Lz_orb              ");
+      fprintf(pfile,"Lz_ej               ");
       fprintf(pfile,"\n");
     }
 
@@ -1016,6 +1025,7 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",mu);
     fprintf(pfile,"%20.6e",Eorb);
     fprintf(pfile,"%20.6e",Lz_orb);
+    fprintf(pfile,"%20.6e",Lz_ej);
     fprintf(pfile,"\n");
 
     // close the file
@@ -1424,7 +1434,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
 			     Real &M_star, Real &mr1, Real &mr12,
 			     Real &mb, Real &mu,
-			     Real &Eorb, Real &Lz_star, Real &Lz_orb){
+			     Real &Eorb, Real &Lz_star, Real &Lz_orb, Real &Lz_ej){
 
 
   Real m1 = GM1/Ggrav;
@@ -1448,6 +1458,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   mb = 0.0;
   mu = 0.0;
   Lz_orb = 0.0;
+  Lz_ej = 0.0;
   for (int ii = 0; ii < 3; ii++){
     lg[ii]  = 0.0;
     lp[ii]  = 0.0;
@@ -1519,6 +1530,11 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  cross(rg,pg,rxp);
 	  for (int ii = 0; ii < 3; ii++){
 	    lg[ii] += rxp[ii];
+	  }
+
+	  // Z-component of angular momentum outsize star
+	  if( instar(phyd->u(IDN,k,j,i), r )==false ){
+	    Lz_ej += lg[2]*pmb->pscalars->r(0,k,j,i);
 	  }
 
 	  // now the flux of angular momentum off of the outer boundary of the grid
@@ -1617,6 +1633,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(MPI_IN_PLACE, &mr12, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &mb, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &mu, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &Lz_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   } else {
     MPI_Reduce(lg,lg,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(ldo,ldo,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
@@ -1633,6 +1650,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(&mr12, &mr12, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&mb, &mb, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&mu, &mu, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&Lz_ej, &Lz_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   }
 
   MPI_Bcast(lg,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
@@ -1650,6 +1668,8 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   MPI_Bcast(&mr12,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&mb,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&mu,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&Lz_ej,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  
 #endif
 
   M_star += m1;
