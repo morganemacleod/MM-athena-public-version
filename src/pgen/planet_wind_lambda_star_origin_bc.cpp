@@ -62,7 +62,8 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]);
 
 void WritePMTrackfile(Mesh *pm, ParameterInput *pin);
 
-Real mdotstar(MeshBlock *pmb, int iout);
+Real MdotMeshStar(MeshBlock *pmb, int iout);
+Real MdotMeshPlanet(MeshBlock *pmb, int iout);
 
 Real fspline(Real r, Real eps);
 Real pspline(Real r, Real eps);
@@ -104,6 +105,9 @@ Real da,pa;
 //Real threshold, dscale; // for AMR
 
 int star_mode; // setting for the stellar BC
+
+Real scalar_val=1.e-10;
+
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -186,8 +190,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   EnrollUserExplicitSourceFunction(StarPlanetWinds);
 
   // Enroll extra history output
-  AllocateUserHistoryOutput(1);
-  EnrollUserHistoryOutput(0, mdotstar, "mdotstar");
+  AllocateUserHistoryOutput(2);
+  EnrollUserHistoryOutput(0, MdotMeshPlanet, "md_m_p");
+  EnrollUserHistoryOutput(1, MdotMeshStar, "md_m_s");
 
    // Enroll AMR
   //if(adaptive==true)
@@ -390,8 +395,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	Real vx,vy,vz;
 	Real vr,vth,vph;
 
-	Real scalar_val=1.e-10;
-
+	
 
 	// Near Planet
 	if(d2 <= radius_planet){
@@ -430,7 +434,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
 	  vr = cs_star * std::min(r/(lambda_star/2. * r_inner), 1.0);  
 	  vth = 0.0;
-	  vph = omega_star*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	  vph = omega_star*SQR(r_inner*sin_th)/Rcyl - Omega[2]*Rcyl;
 	}
 
 	
@@ -442,9 +446,6 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	phydro->u(IEN,k,j,i) = std::max(pres,pa)/(gamma_gas-1.0);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
-
-	pscalars->s(0,k,j,i) = scalar_val*phydro->u(IDN,k,j,i);
-
       }
     }
   } // end loop over cells
@@ -600,10 +601,13 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 
 
 
-Real mdotstar(MeshBlock *pmb, int iout){
+
+
+Real MdotMeshPlanet(MeshBlock *pmb, int iout){
+  // mass flux on/off of the mesh, >0 = inflow, <0 = outflow
   Real mdot = 0.0;
   
-  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
+  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::user) {
      int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
      AthenaArray<Real> area;
      int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
@@ -611,11 +615,49 @@ Real mdotstar(MeshBlock *pmb, int iout){
   
      for(int k=ks; k<=ke; k++) {
        for(int j=js; j<=je; j++) {
-          pmb->pcoord->VolCenterFace1Area(k,j,pmb->is,pmb->ie,area);
-          mdot += area(pmb->is+10)*pmb->phydro->u(IM1,k,j,pmb->is+10); // dmdot = dA*rho*v
+          pmb->pcoord->VolCenterFace1Area(k,j,is,ie,area);
+          mdot += area(is)*pmb->phydro->u(IM1,k,j,is)*pmb->pscalars->r(0,k,j,is); // dmdot = dA*rho*v
         }
       }
     } // end if
+
+  if(pmb->pbval->block_bcs[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+     int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+     AthenaArray<Real> area;
+     int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+     area.NewAthenaArray(ncells1);
+  
+     for(int k=ks; k<=ke; k++) {
+       for(int j=js; j<=je; j++) {
+          pmb->pcoord->VolCenterFace1Area(k,j,is,ie,area);
+          mdot += -area(ie)*pmb->phydro->u(IM1,k,j,ie)*pmb->pscalars->r(0,k,j,ie); // dmdot = dA*rho*v
+        }
+      }
+    } // end if
+
+  
+  return mdot;
+}
+
+
+Real MdotMeshStar(MeshBlock *pmb, int iout){
+  // mass flux on/off of the mesh, >0 = inflow, <0 = outflow
+  Real mdot = 0.0;
+  
+  if(pmb->pbval->block_bcs[BoundaryFace::outer_x1] == BoundaryFlag::user) {
+     int is=pmb->is, ie=pmb->ie, js=pmb->js, je=pmb->je, ks=pmb->ks, ke=pmb->ke;
+     AthenaArray<Real> area;
+     int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
+     area.NewAthenaArray(ncells1);
+  
+     for(int k=ks; k<=ke; k++) {
+       for(int j=js; j<=je; j++) {
+          pmb->pcoord->VolCenterFace1Area(k,j,is,ie,area);
+          mdot += -area(ie)*pmb->phydro->u(IM1,k,j,ie)*pmb->pscalars->r(1,k,j,ie); // dmdot = dA*rho*v
+        }
+      }
+    } // end if
+
   
   return mdot;
 }
@@ -716,7 +758,6 @@ void MeshBlock::UserWorkInLoop(void) {
   }  
 
 
-  // Gravitational acceleration from orbital motion
   for (int k=ks; k<=ke; k++) {
     Real ph=pcoord->x3v(k);
     Real sin_ph = sin(ph);
@@ -769,6 +810,7 @@ void MeshBlock::UserWorkInLoop(void) {
 				       + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
 	  
 	  pscalars->s(0,k,j,i) = 1.0*rho_surface_planet; // set scalar concetration to one
+	  pscalars->s(1,k,j,i) = scalar_val*rho_surface_planet; 
 	} // within planet radius
 
 	/*
@@ -983,14 +1025,16 @@ void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, Face
                 int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
+      Real sin_th = sin(pco->x2v(j));
       for (int i=1; i<=ngh; ++i) {
 	Real r = pco->x1v(il-i);
 	prim(IDN,k,j,il-i) = rho_surface_star;
 	prim(IVX,k,j,il-i) = 0.0;
 	prim(IVY,k,j,il-i) = 0.0;
-	prim(IVZ,k,j,il-i) = 0.0;
+	prim(IVZ,k,j,il-i) = r*sin_th*(omega_star-Omega[2]);
 	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
-	pmb->pscalars->s(0,k,j,il-i) = 1.e-10*prim(IDN,k,j,il-i);
+	pmb->pscalars->s(0,k,j,il-i) = scalar_val*prim(IDN,k,j,il-i);
+	pmb->pscalars->s(1,k,j,il-i) = 1.0*prim(IDN,k,j,il-i);
       }
     }
   }
