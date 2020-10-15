@@ -434,7 +434,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
 	  vr = cs_star * std::min(r/(lambda_star/2. * r_inner), 1.0);  
 	  vth = 0.0;
-	  vph = omega_star*sin_th*sin_th/Rcyl - Omega[2]*Rcyl;
+	  vph = omega_star*SQR(r_inner*sin_th)/Rcyl - Omega[2]*Rcyl;
 	}
 
 	
@@ -1025,12 +1025,13 @@ void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, Face
                 int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
   for (int k=kl; k<=ku; ++k) {
     for (int j=jl; j<=ju; ++j) {
+      Real sin_th = sin(pco->x2v(j));
       for (int i=1; i<=ngh; ++i) {
 	Real r = pco->x1v(il-i);
 	prim(IDN,k,j,il-i) = rho_surface_star;
 	prim(IVX,k,j,il-i) = 0.0;
 	prim(IVY,k,j,il-i) = 0.0;
-	prim(IVZ,k,j,il-i) = 0.0;
+	prim(IVZ,k,j,il-i) = r*sin_th*(omega_star-Omega[2]);
 	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
 	pmb->pscalars->s(0,k,j,il-i) = scalar_val*prim(IDN,k,j,il-i);
 	pmb->pscalars->s(1,k,j,il-i) = 1.0*prim(IDN,k,j,il-i);
