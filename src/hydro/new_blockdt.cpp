@@ -225,5 +225,7 @@ void Hydro::NewBlockTimeStep(int diagnostic_output) {
 	     <<" dt2="<<dt2_min*pmb->pmy_mesh->cfl_number
 	     <<" dt3="<<dt3_min*pmb->pmy_mesh->cfl_number<<"\n";
   }
+
+  return;
   
 }

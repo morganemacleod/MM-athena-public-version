@@ -41,6 +41,14 @@
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
+void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
+
+void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
+		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
+
+
+
 void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
                   const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
@@ -95,6 +103,8 @@ Real da,pa;
 //Real x1_min_derefine; // for AMR
 //Real threshold, dscale; // for AMR
 
+int star_mode; // setting for the stellar BC
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -123,6 +133,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   //rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
   lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
+  star_mode   = pin->GetInteger("problem","star_mode");
 
   //rho_surface_planet = pin->GetOrAddReal("problem","rho_surface_planet",1.e-15);
   lambda_planet = pin->GetOrAddReal("problem","lambda_planet",5.0);
@@ -161,6 +172,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   if(mesh_bcs[BoundaryFace::outer_x1] == GetBoundaryFlag("user")) {
     EnrollUserBoundaryFunction(BoundaryFace::outer_x1, DiodeOuterX1);
   }
+  if(mesh_bcs[BoundaryFace::inner_x1] == GetBoundaryFlag("user")) {
+    if(star_mode==1){
+      EnrollUserBoundaryFunction(BoundaryFace::inner_x1, AccreteInnerX1);
+    }
+    if(star_mode==2){
+      EnrollUserBoundaryFunction(BoundaryFace::inner_x1, WindInnerX1);
+    }
+}
 
 
   // Enroll a Source Function
@@ -403,8 +422,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vph = 0.0; //- Omega[2]*Rcyl;
 	}
 	
-	// Near star
-	if(r<sma/2){
+	// Near star, if there is a wind BC
+	if((r<sma/2) && (star_mode==2)  ){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface_star * pow((r/r_inner),-8);
@@ -570,70 +589,10 @@ void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const Athen
 	cons(IEN,k,j,i) += src_1/den * 0.5*(flux[X1DIR](IDN,k,j,i) + flux[X1DIR](IDN,k,j,i+1));
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
-
-
-
-	
-	// PLANET BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-	if(d2 <= radius_planet){
-	  Real R2 =  sqrt(pow(x-xi[0], 2) +
-			  pow(y-xi[1], 2) );
-	  Real phi2 = std::atan2(y-xi[1],x-xi[0]);
-	  if (phi2 < 0){ 
-	    phi2 += 2*3.1415926535; 
-	  }
-	  Real th2 = std::acos((z-xi[2])/d2);
-	  Real solar_angle = std::acos( std::sin(th2)*std::cos( - phi2) );
-	  Real press_factor = press_factor_aniso(d2,solar_angle);
-	 
-	  Real press_surface_planet = rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
-	  Real cs = std::sqrt(gamma_gas *press_surface_planet/rho_surface_planet);
-	  Real vx = vi[0] - sin(phi2)*(omega_planet-Omega[2])*R2;
-	  Real vy = vi[1] + cos(phi2)*(omega_planet-Omega[2])*R2;
-	  Real vz = vi[2];
-
-	  // convert back to spherical polar
-	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
-	  Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
-	  Real vph = -sin_ph*vx + cos_ph*vy;
-	  
-	  cons(IDN,k,j,i) = rho_surface_planet;
-	  cons(IM1,k,j,i) = rho_surface_planet*vr;
-	  cons(IM2,k,j,i) = rho_surface_planet*vth;  
-	  cons(IM3,k,j,i) = rho_surface_planet*vph;  
-	  cons(IEN,k,j,i) = press_factor*press_surface_planet/(gamma_gas-1.0);
-	  cons(IEN,k,j,i) += 0.5*(SQR(cons(IM1,k,j,i))+SQR(cons(IM2,k,j,i))
-				       + SQR(cons(IM3,k,j,i)))/cons(IDN,k,j,i);
-	  
-	  pmb->pscalars->s(0,k,j,i) = 1.0*rho_surface_planet; // set scalar concetration to one
-	}
-
-
       }
     }
   } // end loop over cells
   
-
-  // STAR BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
-  if(pmb->pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
-    for (int k=pmb->ks; k<=pmb->ke; k++) {
-      for (int j=pmb->js; j<=pmb->je; j++) {
-        Real r = pmb->pcoord->x1v(pmb->is);
-	Real th = pmb->pcoord->x2v(j); 
-	Real Rcyl = r*sin(th);
-	Real press_surface_star = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
-	cons(IDN,k,j,pmb->is) = rho_surface_star;
-        cons(IM1,k,j,pmb->is) = 0.0;
-        cons(IM2,k,j,pmb->is) = 0.0;
-        cons(IM3,k,j,pmb->is) = rho_surface_star*(omega_star-Omega[2])*Rcyl;
-        cons(IEN,k,j,pmb->is) = press_surface_star/(gamma_gas-1.0);
-	cons(IEN,k,j,pmb->is) += 0.5*(SQR(cons(IM1,k,j,pmb->is))+SQR(cons(IM2,k,j,pmb->is))
-				+ SQR(cons(IM3,k,j,pmb->is)))/cons(IDN,k,j,pmb->is);
-      }
-    }
-  } // end loop over innermost blocks
-
-
 
 }
 
@@ -755,6 +714,83 @@ void MeshBlock::UserWorkInLoop(void) {
       phydro->NewBlockTimeStep(1);
     }
   }  
+
+
+  // Gravitational acceleration from orbital motion
+  for (int k=ks; k<=ke; k++) {
+    Real ph=pcoord->x3v(k);
+    Real sin_ph = sin(ph);
+    Real cos_ph = cos(ph);
+    for (int j=js; j<=je; j++) {
+      Real th=pcoord->x2v(j);
+      Real sin_th = sin(th);
+      Real cos_th = cos(th);
+      for (int i=is; i<=ie; i++) {
+	Real r =pcoord->x1v(i);
+	
+	// spherical polar coordinates, get local cartesian           
+	Real x = r*sin_th*cos_ph;
+	Real y = r*sin_th*sin_ph;
+	Real z = r*cos_th;
+  
+	Real d2  = sqrt(pow(x-xi[0], 2) +
+			pow(y-xi[1], 2) +
+			pow(z-xi[2], 2) );
+
+	// PLANET BOUNDARY (note, overwrites the grav accel, ie gravitational accel is not applied in this region)
+	if(d2 <= radius_planet){
+	  Real R2 =  sqrt(pow(x-xi[0], 2) +
+			  pow(y-xi[1], 2) );
+	  Real phi2 = std::atan2(y-xi[1],x-xi[0]);
+	  if (phi2 < 0){ 
+	    phi2 += 2*3.1415926535; 
+	  }
+	  Real th2 = std::acos((z-xi[2])/d2);
+	  Real solar_angle = std::acos( std::sin(th2)*std::cos( - phi2) );
+	  Real press_factor = press_factor_aniso(d2,solar_angle);
+	 
+	  Real press_surface_planet = rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
+	  Real cs = std::sqrt(gamma_gas *press_surface_planet/rho_surface_planet);
+	  Real vx = vi[0] - sin(phi2)*(omega_planet-Omega[2])*R2;
+	  Real vy = vi[1] + cos(phi2)*(omega_planet-Omega[2])*R2;
+	  Real vz = vi[2];
+
+	  // convert back to spherical polar
+	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
+	  Real vth = cos_th*cos_ph*vx + cos_th*sin_ph*vy - sin_th*vz;
+	  Real vph = -sin_ph*vx + cos_ph*vy;
+	  
+	  phydro->u(IDN,k,j,i) = rho_surface_planet;
+	  phydro->u(IM1,k,j,i) = rho_surface_planet*vr;
+	  phydro->u(IM2,k,j,i) = rho_surface_planet*vth;  
+	  phydro->u(IM3,k,j,i) = rho_surface_planet*vph;  
+	  phydro->u(IEN,k,j,i) = press_factor*press_surface_planet/(gamma_gas-1.0);
+	  phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
+				       + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+	  
+	  pscalars->s(0,k,j,i) = 1.0*rho_surface_planet; // set scalar concetration to one
+	} // within planet radius
+
+	/*
+	// STAR BOUNDARY(note, overwrites the grav accel, ie gravitational accel is not applied in this region)
+	if(pbval->block_bcs[BoundaryFace::inner_x1] == BoundaryFlag::reflect) {
+	  Real Rcyl = r*sin(th);
+	  Real press_surface_star = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
+	  phydro->u(IDN,k,j,is) = rho_surface_star;
+	  phydro->u(IM1,k,j,is) = 0.0;
+	  phydro->u(IM2,k,j,is) = 0.0;
+	  phydro->u(IM3,k,j,is) = rho_surface_star*(omega_star-Omega[2])*Rcyl;
+	  phydro->u(IEN,k,j,is) = press_surface_star/(gamma_gas-1.0);
+	  phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
+					  + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
+	}// within star bc layer
+	*/
+
+      }
+    }
+  } // end loop over zones
+
+
   return;
 }
 
@@ -907,6 +943,7 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   }
 
 
+  /*
   // copy face-centered magnetic fields into ghost zones
   if (MAGNETIC_FIELDS_ENABLED) {
     for (int k=ks; k<=ke; ++k) {
@@ -933,9 +970,54 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 	}
       }}
   }
+  */
 
   return;
 }
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void WindInnerX1()
+void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+                Real time, Real dt,
+                int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+	Real r = pco->x1v(il-i);
+	prim(IDN,k,j,il-i) = rho_surface_star;
+	prim(IVX,k,j,il-i) = 0.0;
+	prim(IVY,k,j,il-i) = 0.0;
+	prim(IVZ,k,j,il-i) = 0.0;
+	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
+	pmb->pscalars->s(0,k,j,il-i) = 1.e-10*prim(IDN,k,j,il-i);
+      }
+    }
+  }
+}
+
+
+//----------------------------------------------------------------------------------------
+//! \fn void WindInnerX1()
+void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, FaceField &b,
+                Real time, Real dt,
+                int il, int iu, int jl, int ju, int kl, int ku, int ngh) {
+  
+  for (int k=kl; k<=ku; ++k) {
+    for (int j=jl; j<=ju; ++j) {
+      for (int i=1; i<=ngh; ++i) {
+	prim(IDN,k,j,il-i) = 0.1*prim(IDN,k,j,il);
+	prim(IVX,k,j,il-i) = std::min( prim(IVX,k,j,il), 0.0);
+	prim(IVY,k,j,il-i) = prim(IVY,k,j,il);
+	prim(IVZ,k,j,il-i) = prim(IVZ,k,j,il);
+	prim(IPR,k,j,il-i) = 0.3*prim(IPR,k,j,il);
+	//pscalars->s(0,k,j,il-i) = scalar_val*phydro->u(IDN,k,j,i);
+      }
+    }
+  }
+
+}
+
 
 
 
