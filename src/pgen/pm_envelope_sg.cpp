@@ -1538,12 +1538,12 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  Real epot = -GMenc1*pmb->pcoord->coord_src1_i_(i) - GM2*pspline(d2,rsoft2);
 	  Real ek = 0.5*(SQR(vgas[0]-vcom[0]) +SQR(vgas[1]-vcom[1]) +SQR(vgas[2]-vcom[2]));
 	  Real bern = h+ek+epot;
-	  // bound/unbound mass outside of the star
+	  // bound/unbound mass outside of the star (weighted with scalar)
 	  if ( instar(phyd->u(IDN,k,j,i),r)==false ) {
 	    if (bern < 0.0){
-	      mb += dm;
+	      mb += dm*pmb->pscalars->r(0,k,j,i);
 	    }else{
-	      mu += dm;
+	      mu += dm*pmb->pscalars->r(0,k,j,i);
 	    }
 	  }
 	  
