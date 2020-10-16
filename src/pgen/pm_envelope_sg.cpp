@@ -78,6 +78,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
 			     Real &EK, Real &EPot, Real &EI,Real &Edo,
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
+			     Real &EK_ej, Real &EPot_ej, Real &EI_ej,
 			     Real &M_star, Real &mr1, Real &mr12,
 			     Real &mb, Real &mu,
 			     Real &Eorb, Real &Lz_star, Real &Lz_orb, Real &Lz_ej);
@@ -106,7 +107,7 @@ Real xi[3], vi[3], agas1i[3], agas2i[3]; // cartesian positions/vels of the seco
 Real xcom[3], vcom[3]; // cartesian pos/vel of the COM of the particle/gas system
 Real xcom_star[3], vcom_star[3]; // cartesian pos/vel of the COM of the star
 Real lp[3], lg[3], ldo[3];  // particle, gas, and rate of angular momentum loss
-Real EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb, Lz_ej; // diagnostic output
+Real EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, EK_ej, EPot_ej, EI_ej, M_star, mr1, mr12,mb,mu, Eorb, Lz_star, Lz_orb, Lz_ej; // diagnostic output
 
 Real Omega[3],  Omega_envelope;  // vector rotation of the frame, initial envelope
 
@@ -865,7 +866,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   if(time >= trackfile_next_time || user_force_output ){
     SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
     SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, lp, lg, ldo,
-			    EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, M_star, mr1, mr12,mb,mu,
+			    EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, EK_ej, EPot_ej, EI_ej, M_star, mr1, mr12,mb,mu,
 			    Eorb, Lz_star, Lz_orb,Lz_ej);
     WritePMTrackfile(pblock->pmy_mesh,pin);
   }
@@ -934,6 +935,9 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"EK_star             ");
       fprintf(pfile,"EPot_star           ");
       fprintf(pfile,"EI_star             ");
+      fprintf(pfile,"EK_ej               ");
+      fprintf(pfile,"EPot_ej             ");
+      fprintf(pfile,"EI_ej               ");
       fprintf(pfile,"M_star              ");
       fprintf(pfile,"Lz_star             ");
       fprintf(pfile,"mr1                 ");
@@ -987,6 +991,9 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",EK_star);
     fprintf(pfile,"%20.6e",EPot_star);
     fprintf(pfile,"%20.6e",EI_star);
+    fprintf(pfile,"%20.6e",EK_ej);
+    fprintf(pfile,"%20.6e",EPot_ej);
+    fprintf(pfile,"%20.6e",EI_ej);
     fprintf(pfile,"%20.6e",M_star);
     fprintf(pfile,"%20.6e",Lz_star);
     fprintf(pfile,"%20.6e",mr1);
@@ -1380,6 +1387,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 			     Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3],
 			     Real &EK, Real &EPot, Real &EI,Real &Edo,
 			     Real &EK_star, Real &EPot_star, Real &EI_star,
+			     Real &EK_ej, Real &EPot_ej, Real &EI_ej,
 			     Real &M_star, Real &mr1, Real &mr12,
 			     Real &mb, Real &mu,
 			     Real &Eorb, Real &Lz_star, Real &Lz_orb, Real &Lz_ej){
@@ -1398,6 +1406,9 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   EK_star = 0.0;
   EPot_star = 0.0;
   EI_star = 0.0;
+  EK_ej = 0.0;
+  EPot_ej = 0.0;
+  EI_ej = 0.0;
   M_star = 0.0;
   mr1 = 0.0;
   mr12 = 0.0;
@@ -1553,6 +1564,14 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	    EPot_star += -GMenc1*pmb->pcoord->coord_src1_i_(i)*dm;
 
 	    Lz_star += pmb->phydro->u(IM3,k,j,i)*vol(i)*r*sin_th;
+	  }else{
+	    // ejecta (intertial frame)
+	    EK_ej += ek*dm*pmb->pscalars->r(0,k,j,i);
+	    EPot_ej += epot*dm*pmb->pscalars->r(0,k,j,i);
+	    EI_ej += pmb->pscalars->r(0,k,j,i)*vol(i)* (pmb->phydro->u(IEN,k,j,i) -
+						     0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
+							  + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
+	    
 	  }
 	  
 	  	    
@@ -1575,6 +1594,9 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(MPI_IN_PLACE, &EK_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EPot_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &EI_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EK_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EPot_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EI_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &Lz_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &M_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &mr1, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
@@ -1592,6 +1614,9 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(&EK_star, &EK_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EPot_star, &EPot_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&EI_star, &EI_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EK_ej, &EK_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EPot_ej, &EPot_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EI_ej, &EI_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&Lz_star, &Lz_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&M_star, &M_star, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&mr1, &mr1, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
@@ -1610,6 +1635,9 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   MPI_Bcast(&EK_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EPot_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&EI_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EK_ej,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EPot_ej,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EI_ej,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&M_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&Lz_star,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&mr1,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
