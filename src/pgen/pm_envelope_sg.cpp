@@ -132,6 +132,7 @@ Real Omega_orb_fixed,sma_fixed;
 Real output_next_sep,dsep_output; // controling user forced output (set with dt=999.)
 
 int update_grav_every;
+bool inert_bg;  // should the background respond to forces 
 
 
 //======================================================================================
@@ -183,6 +184,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
+
+  // background
+  inert_bg = pin->GetOrAddBoolean("problem","inert_bg",false);
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -563,6 +567,14 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	Real src_1 = dt*den*a_r; 
 	Real src_2 = dt*den*a_th;
 	Real src_3 = dt*den*a_ph;
+
+	// if the background is inert scale forces by envelope scalar
+	if(inert_bg){
+	  src_1 *= pmb->pscalars->r(0,k,j,i);
+	  src_2 *= pmb->pscalars->r(0,k,j,i);
+	  src_3 *= pmb->pscalars->r(0,k,j,i);
+	}
+	  
 	
 	// add the source term to the momenta  (source = - rho * a)
 	cons(IM1,k,j,i) += src_1;
