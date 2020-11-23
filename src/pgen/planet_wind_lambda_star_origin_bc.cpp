@@ -415,9 +415,12 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_planet * pow(den / rho_surface_planet, gamma_gas);
 	  // wind directed outward at v=cs
 	  // constant angular momentum of surface
-	  vx = (x-xi[0])/d2 * cs_planet + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	  vy = (y-xi[1])/d2 * cs_planet + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	  vz = (z-xi[2])/d2 * cs_planet + vi[2];
+	  //vx = (x-xi[0])/d2 * cs_planet + vi[0] - sin(phi2)*(omega_planet*radius_planet*radius_planet*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*R2);  
+	  //vy = (y-xi[1])/d2 * cs_planet + vi[1] + cos(phi2)*(omega_planet*radius_planet*radius_planet*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*R2);  
+	  //vz = (z-xi[2])/d2 * cs_planet + vi[2];
+	  vx = vi[0];
+	  vy = vi[1];
+	  vz = vi[2];
 	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	  vph = -sin(ph)*vx + cos(ph)*vy;
@@ -429,17 +432,18 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vph = 0.0; //- Omega[2]*Rcyl;
 	}
 	
+	/*
 	// Near star, if there is a wind BC
 	if((r<sma/2) && (star_mode==2)  ){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface_star * pow((r/r_inner),-8);
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
-	  vr = cs_star * std::min(r/(lambda_star/2. * r_inner), 1.0);  
+	  vr = sqrt(2*GM1/r); //cs_star; // * std::min(r/(lambda_star/2. * r_inner), 1.0);  
 	  vth = 0.0;
 	  vph = omega_star*SQR(r_inner*sin_th)/Rcyl - Omega[2]*Rcyl;
 	}
-
+	*/
 	
 	
 	phydro->u(IDN,k,j,i) = std::max(den,da);
@@ -1036,8 +1040,8 @@ void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, Face
 	prim(IVY,k,j,il-i) = 0.0;
 	prim(IVZ,k,j,il-i) = r*sin_th*(omega_star-Omega[2]);
 	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
-	pmb->pscalars->s(0,k,j,il-i) = scalar_val*prim(IDN,k,j,il-i);
-	pmb->pscalars->s(1,k,j,il-i) = 1.0*prim(IDN,k,j,il-i);
+	pmb->pscalars->r(0,k,j,il-i) = scalar_val;
+	pmb->pscalars->r(1,k,j,il-i) = 1.0;
       }
     }
   }
