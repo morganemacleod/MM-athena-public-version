@@ -655,7 +655,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	if(r<1.0){
 	  pscalars->s(0,k,j,i) = 1.0*phydro->u(IDN,k,j,i);
 	}else{
-	  pscalars->s(0,k,j,i) = 1.0e-10*phydro->u(IDN,k,j,i);
+	  pscalars->s(0,k,j,i) = 1.e-30*phydro->u(IDN,k,j,i);
 	}
 	
       }
@@ -1418,6 +1418,9 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   mu = 0.0;
   Lz_orb = 0.0;
   Lz_ej = 0.0;
+
+  Real EPotg2 = 0.0;
+
   for (int ii = 0; ii < 3; ii++){
     lg[ii]  = 0.0;
     lp[ii]  = 0.0;
@@ -1550,6 +1553,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  // intertial frame energies
 	  EK += ek*dm;
 	  EPot += epot*dm;
+	  EPotg2 += - GM2*pspline(d2,rsoft2)*dm;
 	  EI += vol(i)* (pmb->phydro->u(IEN,k,j,i) -
 			 0.5*(SQR(pmb->phydro->u(IM1,k,j,i))+SQR(pmb->phydro->u(IM2,k,j,i))
 			      + SQR(pmb->phydro->u(IM3,k,j,i)))/pmb->phydro->u(IDN,k,j,i) );
@@ -1604,6 +1608,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(MPI_IN_PLACE, &mb, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &mu, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(MPI_IN_PLACE, &Lz_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(MPI_IN_PLACE, &EPotg2, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   } else {
     MPI_Reduce(lg,lg,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(ldo,ldo,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
@@ -1624,6 +1629,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     MPI_Reduce(&mb, &mb, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&mu, &mu, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
     MPI_Reduce(&Lz_ej, &Lz_ej, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
+    MPI_Reduce(&EPotg2, &EPotg2, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
   }
 
   MPI_Bcast(lg,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
@@ -1645,6 +1651,7 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   MPI_Bcast(&mb,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&mu,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   MPI_Bcast(&Lz_ej,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
+  MPI_Bcast(&EPotg2,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
   
 #endif
 
@@ -1677,10 +1684,10 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   Real v2_sq = SQR(vi[0]-vcom[0]) + SQR(vi[1]-vcom[1]) + SQR(vi[2]-vcom[2]);
   EK += 0.5*m1*(SQR(vcom[0]) + SQR(vcom[1]) + SQR(vcom[2]));
   EK += 0.5*m2*v2_sq;
-  Eorb = 0.5*M_star*v1_sq + 0.5*m2*v2_sq - Ggrav*M_star*m2/d12;
+  Eorb = 0.5*M_star*v1_sq + 0.5*m2*v2_sq - GM1*m2/d12 + EPotg2;
   Real Lz_1 = M_star*((xcom_star[0]-xcom[0])*(vcom_star[1]-vcom[1])
 		      -(xcom_star[1]-xcom[1])*(vcom_star[0]-vcom[0]));
-  Lz_orb = Lz_1 + lp[2];
+  Lz_orb = Lz_1 + r2xp2[2];
 
   
 }
