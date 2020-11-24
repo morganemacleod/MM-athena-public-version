@@ -132,6 +132,8 @@ Real Omega_orb_fixed,sma_fixed;
 Real output_next_sep,dsep_output; // controling user forced output (set with dt=999.)
 
 int update_grav_every;
+bool inert_bg;  // should the background respond to forces
+Real tau_relax_start;
 
 
 //======================================================================================
@@ -157,6 +159,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
+  tau_relax_start = pin->GetOrAddReal("problem","tau_relax_start",1.0);
   t_mass_on = pin->GetOrAddReal("problem","t_mass_on",0.0);
   corotating_frame = pin->GetInteger("problem","corotating_frame");
 
@@ -183,6 +186,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
+
+  // background
+  inert_bg = pin->GetOrAddBoolean("problem","inert_bg",false);
+  
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -563,6 +570,14 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaAr
 	Real src_1 = dt*den*a_r; 
 	Real src_2 = dt*den*a_th;
 	Real src_3 = dt*den*a_ph;
+
+	// if the background is inert scale forces by envelope scalar
+	if(inert_bg){
+	  src_1 *= pmb->pscalars->r(0,k,j,i);
+	  src_2 *= pmb->pscalars->r(0,k,j,i);
+	  src_3 *= pmb->pscalars->r(0,k,j,i);
+	}
+	  
 	
 	// add the source term to the momenta  (source = - rho * a)
 	cons(IM1,k,j,i) += src_1;
@@ -677,9 +692,10 @@ void MeshBlock::UserWorkInLoop(void)
   // if less than the relaxation time, apply 
   // a damping to the fluid velocities
   if(time < t_relax){
-    Real tau = 1.0;
+    Real tau = tau_relax_start;
+    Real dex = 2.0-log10(tau_relax_start);
     if(time > 0.2*t_relax){
-      tau *= pow(10, 2.0*(time-0.2*t_relax)/(0.8*t_relax) );
+      tau *= pow(10, dex*(time-0.2*t_relax)/(0.8*t_relax) );
     }
     if (Globals::my_rank==0){
       std::cout << "Relaxing: tau_damp ="<<tau<<std::endl;
