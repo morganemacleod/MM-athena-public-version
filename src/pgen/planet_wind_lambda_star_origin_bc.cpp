@@ -49,8 +49,10 @@ void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,Fa
 
 
 
-void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
-                  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
+void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim,
+		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
+		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar); 
 
 
 void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
@@ -458,8 +460,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 
 // Source Function for two point masses
-void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
-		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
+void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim,
+		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
+		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar)
 { 
 
   if(is_restart>0){
@@ -856,6 +860,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   Real ai[3];
   Real mg;
+  Mesh *pm = my_blocks(0)->pmy_mesh;
   
   // kick the initial conditions back a half step (v^n-1/2)
   if(ncycle==0){
@@ -890,7 +895,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // write the output to the trackfile
   if(time >= trackfile_next_time || user_force_output ){
-    WritePMTrackfile(pblock->pmy_mesh,pin);
+    WritePMTrackfile(pm,pin);
   }
   
 }
