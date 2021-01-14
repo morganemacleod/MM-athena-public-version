@@ -229,7 +229,13 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // Enroll extra history output
   //AllocateUserHistoryOutput(8);
   //EnrollUserHistoryOutput(0, mxOmegaEnv, "mxOmegaEnv");
-  
+
+
+
+  // Check the scalar count
+  if(NSCALARS != 7){
+    std::cout<<"COMPILED WITH "<<NSCALARS<<" SCALARS but 7 are required!!!";
+  }
 
   // always write at startup
   trackfile_next_time = time;
@@ -244,7 +250,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     //std:: cout << rad[i] << "    " << rho[i] << std::endl;
   }
   infile.close();
- 
+
+  
   
   // set the inner point mass based on excised mass
   Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin, NARRAY );
@@ -741,11 +748,14 @@ void MeshBlock::UserWorkInLoop(void)
 	  Real z = r*cos_th;
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
   
-	  pscalars->s(1,k,j,i) = x;
-	  pscalars->s(2,k,j,i) = y;
-	  pscalars->s(3,k,j,i) = z;
-	  
-	  pscalars->s(4,k,j,i) = phydro->u(IEN,k,j,i)/den  - GMenc1*pcoord->coord_src1_i_(i);
+	  pscalars->s(1,k,j,i) = r;
+	  pscalars->s(2,k,j,i) = th;
+	  pscalars->s(3,k,j,i) = ph;
+
+	  Real ek = 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)) + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i); 
+	  pscalars->s(4,k,j,i) = (phydro->u(IEN,k,j,i) - ek)/den; //ei
+	  pscalars->s(5,k,j,i) = ek/den; // ek
+	  pscalars->s(6,k,j,i) = GMenc1*pcoord->coord_src1_i_(i); // neg epot
   
 	}
       }
