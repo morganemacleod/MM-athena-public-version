@@ -49,8 +49,10 @@ Real Interpolate1DArrayEven(Real *x,Real *y,Real x0, int length);
 void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,FaceField &b,
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
-void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
-                  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
+void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim,
+		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
+		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar); 
 
 
 void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
@@ -436,8 +438,10 @@ Real GetGM2factor(Real time){
 
 
 // Source Function for two point masses
-void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
-		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
+void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim,
+		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
+		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar) 
 { 
 
   if(is_restart>0){
@@ -762,6 +766,8 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   Real ai[3],acom[3];
   Real mg,mg_star;
+  Mesh *pm = my_blocks(0)->pmy_mesh;
+
 
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
   // (NOTE: DOESN'T WORK WITH RESTARTS)
@@ -769,13 +775,13 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
 
     // initialize the COM position velocity
-    SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+    SumComPosVel(pm, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
         
     // kick the initial conditions back a half step (v^n-1/2)
 
     // first sum the gas accel if needed
     if(include_gas_backreaction == 1){
-      SumGasOnParticleAccels(pblock->pmy_mesh, xi,agas1i,agas2i);
+      SumGasOnParticleAccels(pm, xi,agas1i,agas2i);
     }
 
     ParticleAccels(xi,vi,ai);
@@ -786,7 +792,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       Real sep,vel,dt_pre_integrator;
       int n_steps_pre_integrator;
 
-      SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+      SumComPosVel(pm, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
       //Real GMenv = Ggrav*mg;
       Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
 
@@ -830,7 +836,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       vi[1] = sma_fixed*Omega_orb_fixed*std::cos(theta_orb);
       vi[2] = 0.0;
 
-      SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+      SumComPosVel(pm, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
     }else{
       for (int ii=1; ii<=n_particle_substeps; ii++) {
 	// add the particle acceleration to ai
@@ -888,7 +894,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // sum the enclosed mass profile for monopole gravity
   if(ncycle%update_grav_every == 0){
-    SumMencProfile(pblock->pmy_mesh,menc);
+    SumMencProfile(pm,menc);
     if (Globals::my_rank == 0 ){
       std::cout << "enclosed mass updated... Menc(r=1) = " << Interpolate1DArrayEven(logr,menc,0.0, NGRAV) <<"\n";
     }
@@ -897,17 +903,17 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
-    SumGasOnParticleAccels(pblock->pmy_mesh, xi,agas1i,agas2i);
+    SumGasOnParticleAccels(pm, xi,agas1i,agas2i);
   }
   
   
   // write the output to the trackfile
   if(time >= trackfile_next_time || user_force_output ){
-    SumComPosVel(pblock->pmy_mesh, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
-    SumTrackfileDiagnostics(pblock->pmy_mesh, xi, vi, lp, lg, ldo,
+    SumComPosVel(pm, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
+    SumTrackfileDiagnostics(pm, xi, vi, lp, lg, ldo,
 			    EK, EPot, EI, Edo, EK_star, EPot_star, EI_star, EK_ej, EPot_ej, EI_ej, M_star, mr1, mr12,mb,mu,
 			    Eorb, Lz_star, Lz_orb,Lz_ej);
-    WritePMTrackfile(pblock->pmy_mesh,pin);
+    WritePMTrackfile(pm,pin);
   }
 
   // std output
@@ -1164,13 +1170,15 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
     ag2i[ii] = 0.0;
   }
   
-  MeshBlock *pmb=pm->pblock;
+  MeshBlock *pmb=pm->my_blocks(0);
   AthenaArray<Real> vol;
   
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
   vol.NewAthenaArray(ncells1);
 
-  while (pmb != NULL) {
+  // Loop over MeshBlocks
+  for (int b=0; b<pm->nblocal; ++b) {
+    pmb = pm->my_blocks(b);
     Hydro *phyd = pmb->phydro;
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
@@ -1250,7 +1258,6 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi)[3],Real (&ag1i)[3],Real (&ag2i)
 	}
       }
     }//end loop over cells
-    pmb=pmb->next;
   }//end loop over meshblocks
 
 
@@ -1291,13 +1298,15 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
     vgcom_star[ii] = 0.0;
   }
   
-  MeshBlock *pmb=pm->pblock;
+  MeshBlock *pmb=pm->my_blocks(0);
   AthenaArray<Real> vol;
   
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
   vol.NewAthenaArray(ncells1);
 
-  while (pmb != NULL) {
+  // Loop over MeshBlocks
+  for (int b=0; b<pm->nblocal; ++b) {
+    pmb = pm->my_blocks(b);
     Hydro *phyd = pmb->phydro;
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
@@ -1367,7 +1376,6 @@ void SumComPosVel(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	}
       }
     }//end loop over cells
-    pmb=pmb->next;
   }//end loop over meshblocks
 
 #ifdef MPI_PARALLEL
@@ -1467,13 +1475,15 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
   }
   
   // loop over cells here
-  MeshBlock *pmb=pm->pblock;
+  MeshBlock *pmb=pm->my_blocks(0);
   AthenaArray<Real> vol;
   
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
   vol.NewAthenaArray(ncells1);
   
-  while (pmb != NULL) {
+  // Loop over MeshBlocks
+  for (int b=0; b<pm->nblocal; ++b) {
+    pmb = pm->my_blocks(b);
     Hydro *phyd = pmb->phydro;
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
@@ -1621,7 +1631,6 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	}
       }
     }//end loop over cells
-    pmb=pmb->next;
   }//end loop over meshblocks
  
   
@@ -1741,13 +1750,15 @@ void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]){
     menc[ii] = 0.0;
   }
   
-  MeshBlock *pmb=pm->pblock;
+  MeshBlock *pmb=pm->my_blocks(0);
   AthenaArray<Real> vol;
   
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
   vol.NewAthenaArray(ncells1);
 
-  while (pmb != NULL) {
+  // Loop over MeshBlocks
+  for (int b=0; b<pm->nblocal; ++b) {
+    pmb = pm->my_blocks(b);
     Hydro *phyd = pmb->phydro;
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
@@ -1769,7 +1780,6 @@ void SumMencProfile(Mesh *pm, Real (&menc)[NGRAV]){
 	}
       }
     }//end loop over cells
-    pmb=pmb->next;
   }//end loop over meshblocks
 
 #ifdef MPI_PARALLEL
