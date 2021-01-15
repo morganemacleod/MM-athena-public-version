@@ -748,14 +748,14 @@ void MeshBlock::UserWorkInLoop(void)
 	  Real z = r*cos_th;
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
   
-	  pscalars->s(1,k,j,i) = r;
-	  pscalars->s(2,k,j,i) = th;
-	  pscalars->s(3,k,j,i) = ph;
+	  pscalars->s(1,k,j,i) = r*den;
+	  pscalars->s(2,k,j,i) = th*den;
+	  pscalars->s(3,k,j,i) = ph*den;
 
 	  Real ek = 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)) + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i); 
-	  pscalars->s(4,k,j,i) = (phydro->u(IEN,k,j,i) - ek)/den; //ei
-	  pscalars->s(5,k,j,i) = ek/den; // ek
-	  pscalars->s(6,k,j,i) = GMenc1*pcoord->coord_src1_i_(i); // neg epot
+	  pscalars->s(4,k,j,i) = phydro->u(IEN,k,j,i) - ek; //ei
+	  pscalars->s(5,k,j,i) = ek; // ek
+	  pscalars->s(6,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot
   
 	}
       }
