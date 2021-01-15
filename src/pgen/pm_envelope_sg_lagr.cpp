@@ -737,11 +737,11 @@ void MeshBlock::UserWorkInLoop(void)
 	  Real z = r*cos_th;
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
   
-	  pscalars->s(1,k,j,i) = x;
-	  pscalars->s(2,k,j,i) = y;
-	  pscalars->s(3,k,j,i) = z;
+	  pscalars->s(1,k,j,i) = x*den;
+	  pscalars->s(2,k,j,i) = y*den;
+	  pscalars->s(3,k,j,i) = z*den;
 	  
-	  pscalars->s(4,k,j,i) = phydro->u(IEN,k,j,i)/den  - GMenc1*pcoord->coord_src1_i_(i);
+	  pscalars->s(4,k,j,i) = phydro->u(IEN,k,j,i)  - GMenc1*pcoord->coord_src1_i_(i)*den;
   
 	}
       }
