@@ -743,9 +743,9 @@ void MeshBlock::UserWorkInLoop(void)
 	  
 	  // set the lagrangian scalars (t<trelax)
 	  // spherical polar coordinates, get local cartesian                                                                                               
-	  Real x = r*sin_th*cos_ph;
-	  Real y = r*sin_th*sin_ph;
-	  Real z = r*cos_th;
+	  //Real x = r*sin_th*cos_ph;
+	  //Real y = r*sin_th*sin_ph;
+	  //Real z = r*cos_th;
 	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
   
 	  pscalars->s(1,k,j,i) = r*den;
