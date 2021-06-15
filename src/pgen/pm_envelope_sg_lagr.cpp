@@ -23,7 +23,7 @@
 #include <fstream>
 #include <iostream>
 #define NARRAY 10000
-#define NGRAV 100
+#define NGRAV 200
 
 
 // Athena++ headers
@@ -700,12 +700,12 @@ void MeshBlock::UserWorkInLoop(void)
 {
   Real time = pmy_mesh->time;
   Real dt = pmy_mesh->dt;
-  //Real v_factor;
-  
+  Real tau;
+
   // if less than the relaxation time, apply 
   // a damping to the fluid velocities
   if(time < t_relax){
-    Real tau = tau_relax_start;
+    tau = tau_relax_start;
     Real dex = 2.0-log10(tau_relax_start);
     if(time > 0.2*t_relax){
       tau *= pow(10, dex*(time-0.2*t_relax)/(0.8*t_relax) );
@@ -713,19 +713,23 @@ void MeshBlock::UserWorkInLoop(void)
     if (Globals::my_rank==0){
       std::cout << "Relaxing: tau_damp ="<<tau<<std::endl;
     }
+  } // time<t_relax
 
-    for (int k=ks; k<=ke; k++) {
-      Real ph= pcoord->x3v(k);
-      Real sin_ph = sin(ph);
-      Real cos_ph = cos(ph);
-      for (int j=js; j<=je; j++) {
-	Real th= pcoord->x2v(j);
-	Real sin_th = sin(th);
-	Real cos_th = cos(th);
-	for (int i=is; i<=ie; i++) {
-	  Real r = pcoord->x1v(i);
+  for (int k=ks; k<=ke; k++) {
+    Real ph= pcoord->x3v(k);
+    //Real sin_ph = sin(ph);
+    //Real cos_ph = cos(ph);
+    for (int j=js; j<=je; j++) {
+      Real th= pcoord->x2v(j);
+      //Real sin_th = sin(th);
+      //Real cos_th = cos(th);
+      for (int i=is; i<=ie; i++) {
+	Real r = pcoord->x1v(i);
+	Real den = phydro->u(IDN,k,j,i);
+	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
+	pscalars->s(7,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot     	
 
-	  Real den = phydro->u(IDN,k,j,i);
+	if (time<t_relax){
 	  Real vr  = phydro->u(IM1,k,j,i) / den;
 	  Real vth = phydro->u(IM2,k,j,i) / den;
 	  Real vph = phydro->u(IM3,k,j,i) / den;
@@ -740,27 +744,23 @@ void MeshBlock::UserWorkInLoop(void)
 	  
 	  phydro->u(IEN,k,j,i) += dt*den*a_damp_r*vr + dt*den*a_damp_th*vth + dt*den*a_damp_ph*vph; 
 	
-	  
+	
 	  // set the lagrangian scalars (t<trelax)
-	  // spherical polar coordinates, get local cartesian                                                                                               
-	  //Real x = r*sin_th*cos_ph;
-	  //Real y = r*sin_th*sin_ph;
-	  //Real z = r*cos_th;
-	  Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
-  
 	  pscalars->s(1,k,j,i) = r*den;
 	  pscalars->s(2,k,j,i) = th*den;
 	  pscalars->s(3,k,j,i) = ph*den;
-
+	  
 	  Real ek = 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i)) + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i); 
 	  pscalars->s(4,k,j,i) = phydro->u(IEN,k,j,i) - ek; //ei
 	  pscalars->s(5,k,j,i) = ek; // ek
 	  pscalars->s(6,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot
-  
-	}
+	
+	}//end time<t_relax
+	
       }
-    } // end loop over cells                   
-  } // end relax
+    }
+  } // end loop over cells                   
+  
 
   return;
 } // end of UserWorkInLoop
