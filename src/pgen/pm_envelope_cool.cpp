@@ -93,6 +93,11 @@ Real pspline(Real r, Real eps);
 bool instar(Real den, Real r);
 
 
+Real kappa();
+Real scale_height_cool();
+
+
+
 // global (to this file) problem parameters
 Real gamma_gas; 
 Real da,pa; // ambient density, pressure
@@ -136,7 +141,15 @@ Real output_next_sep,dsep_output; // controling user forced output (set with dt=
 int update_grav_every;
 bool inert_bg;  // should the background respond to forces
 Real tau_relax_start;
+Real rstar_initial;
 
+
+bool cooling; // whether to apply cooling function or not
+Real Lstar; // stellar luminosity
+
+Real sigmaSB = 5.67051e-5; //erg / cm^2 / K^4
+Real kB = 1.380658e-16; // erg / K
+Real mH = 1.6733e-24; // g
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -188,9 +201,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
-
+  rstar_initial = pin->GetOrAddReal("problem","rstar_initial",1.0);
+  
   // background
   inert_bg = pin->GetOrAddBoolean("problem","inert_bg",false);
+
+  // cooling parameters
+  cooling = pin->GetOrAddBoolean("problem","cooling",false);
+  Lstar = pin->GetOrAddReal("problem","lstar",4.e33);
   
 
   // local vars
@@ -343,7 +361,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========================================================\n";
     std::cout << "==========   SIMULATION INFO =============================\n";
     std::cout << "==========================================================\n";
-    std::cout << "mode =" << mode << "\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
@@ -374,6 +391,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "vx ="<<vi[0]<<"\n";
     std::cout << "vy ="<<vi[1]<<"\n";
     std::cout << "vz ="<<vi[2]<<"\n";
+    std::cout << "==========================================================\n";
+    std::cout << "cooling = " << cooling <<"\n";
     std::cout << "==========================================================\n";
   }
   
@@ -441,6 +460,22 @@ Real GetGM2factor(Real time){
   
   return GM2_factor;
 }
+
+
+
+/// Cooling functions
+Real kappa()
+{
+  return 1.0e-4;
+}
+
+Real scale_height_cool()
+{
+  return 7.0e10; 
+}
+
+
+
 
 
 
@@ -602,6 +637,35 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
 	//cons(IEN,k,j,i) += src_3/den * 0.5*(flux[X3DIR](IDN,k,j,i) + flux[X3DIR](IDN,k+1,j,i));
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
+
+	
+	// APPLY LOCAL COOLING FUNCTION
+	if(cooling){
+	  Real denr0 = pmb->pscalars->r(0,k,j,i) * den;
+	  Real Sigma = std::max(denr0*scale_height_cool(),mH);
+	  Real kap = kappa();
+	  Real tau = Sigma*kap;	  
+	  
+	  Real Teq = pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
+	  Real mu = 1.0;
+	  Real Temp = prim(IPR,k,j,i) * mu * mH / (den * kB);
+	  Real ueq = den*kB*Teq/(mu*mH*(gamma_gas-1));
+	  Real u = prim(IPR,k,j,i)/(gamma_gas-1);
+	  	  
+	  Real dudt = 4.0*sigmaSB*( pow(Teq,4) - pow(Temp,4))/(Sigma*tau + 1/kap);
+	  Real t_therm = std::max( std::abs((ueq-u)/dudt) , 100.0*(pmb->pmy_mesh->dt) );
+	  
+	  Real exp_step = 1.0 - exp(-(pmb->pmy_mesh->dt) / t_therm);
+	  
+	  //std::cout<<"r="<<r<<"  tau="<<tau<<"  Temp="<<Temp<<"  Teq="<<Teq<<"  t_therm="<<t_therm<<"  exp="<<exp_step<<"\n";
+	  
+	  cons(IEN,k,j,i) +=  pmb->pscalars->r(0,k,j,i) * (ueq-u)*exp_step;
+
+	    
+	} // end coooling
+
+	
+
       }
     }
   } // end loop over cells
@@ -678,7 +742,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
 
 	// set the scalar
-	if(r<1.0){
+	if(r<rstar_initial){
 	  pscalars->s(0,k,j,i) = 1.0*phydro->u(IDN,k,j,i);
 	}else{
 	  pscalars->s(0,k,j,i) = 1.e-30*phydro->u(IDN,k,j,i);
@@ -906,7 +970,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   if(ncycle%update_grav_every == 0){
     SumMencProfile(pm,menc);
     if (Globals::my_rank == 0 ){
-      std::cout << "enclosed mass updated... Menc(r=1) = " << Interpolate1DArrayEven(logr,menc,0.0, NGRAV) <<"\n";
+      std::cout << "enclosed mass updated... Menc(r=rstar_initial) = " << Interpolate1DArrayEven(logr,menc,log10(rstar_initial), NGRAV) <<"\n";
     }
   }
 
