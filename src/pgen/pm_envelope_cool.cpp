@@ -649,17 +649,17 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
 	  Real Teq = pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
 	  Real mu = 1.0;
 	  Real Temp = prim(IPR,k,j,i) * mu * mH / (den * kB);
-	  Real ueq = den*kB*Teq/(mu*mH*(gamma_gas-1));
-	  Real u = prim(IPR,k,j,i)/(gamma_gas-1);
+	  Real ueq = kB*Teq/(mu*mH*(gamma_gas-1));  // erg/g
+	  Real u = prim(IPR,k,j,i)/(den*(gamma_gas-1)); // erg/g
 	  	  
-	  Real dudt = 4.0*sigmaSB*( pow(Teq,4) - pow(Temp,4))/(Sigma*tau + 1/kap);
+	  Real dudt = 4.0*sigmaSB*( pow(Teq,4) - pow(Temp,4))/(Sigma*tau + 1/kap);  //erg/g/s
 	  Real t_therm = std::max( std::abs((ueq-u)/dudt) , 100.0*(pmb->pmy_mesh->dt) );
 	  
 	  Real exp_step = 1.0 - exp(-(pmb->pmy_mesh->dt) / t_therm);
 	  
 	  //std::cout<<"r="<<r<<"  tau="<<tau<<"  Temp="<<Temp<<"  Teq="<<Teq<<"  t_therm="<<t_therm<<"  exp="<<exp_step<<"\n";
 	  
-	  cons(IEN,k,j,i) +=  pmb->pscalars->r(0,k,j,i) * (ueq-u)*exp_step;
+	  cons(IEN,k,j,i) +=  denr0*(ueq-u)*exp_step;
 
 	    
 	} // end coooling
