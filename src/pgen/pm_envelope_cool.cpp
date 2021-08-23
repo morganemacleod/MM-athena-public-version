@@ -274,7 +274,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // set the inner point mass based on excised mass
   Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin, NARRAY );
   GM1 = Ggrav*menc_rin;
-  Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
+  Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01*rstar_initial, NARRAY) - GM1;
 
 
   // allocate the enclosed mass profile
