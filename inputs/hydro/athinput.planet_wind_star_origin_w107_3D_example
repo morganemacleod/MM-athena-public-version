@@ -1,0 +1,128 @@
+<job>
+problem_id = PW_W107     # problem ID: basename of output filenames
+
+<output1>
+file_type  = hdf5        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.e5      # time increment between outputs
+xdmf = 0
+
+<output2>
+file_type  = hst      # history
+dt         = 1.e3   # time increment between outputs
+
+<output3>
+file_type  = rst      # restart
+dt         = 1.0e5     # time increment between outputs
+
+#<output4>
+#file_type  = hdf5        # Binary data dump
+#variable   = prim       # variables to be output
+#dt         = 1.e4      # time increment between outputs
+#xdmf = 0
+#x2_slice = 1.5707963267948966
+
+<time>
+cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1      # cycle limit
+tlim       = 3.e6       # time limit
+integrator = vl2
+xorder = 2
+###dt_diagnostics = 0
+
+
+<mesh>
+nx1        = 128        # Number of zones in X1-direction
+x1rat      = 1.033060828511823        # ratio between adjacent cell sizes
+x1min      = 7e10        # minimum value of X1
+x1max      = 4.5e12       # maximum value of X1
+ix1_bc     = user   # inner-X1 boundary flag
+ox1_bc     = user    # outer-X1 boundary flag
+
+nx2        = 96             # Number of zones in X2-direction
+x2min      = 0            # minimum value of X2
+x2max      = 3.141592653589793   # maximum value of X2
+ix2_bc     = polar        # inner-X2 boundary flag
+ox2_bc     = polar        # outer-X2 boundary flag
+
+nx3        = 192          # Number of zones in X3-direction
+x3min      = 0.0 # minimum value of X3
+x3max      = 6.2831853071795862 # maximum value of X3
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
+
+
+refinement =  static
+
+<refinement1>
+## Box at 10x Rplanet
+level = 5
+x1min = 7.556e11
+x1max = 8.9e11
+x2min = 1.4891239884380663 
+x2max = 1.6524686651517269
+x3min = 3.059920315232963
+x3max = 3.2232649919466234
+
+#<refinement2>
+## uniform refinement around star bc
+#level = 1
+#x1min = 7.e10
+#x1max = 9.e10
+#x2min = 0.0
+#x2max = 3.141592653589793
+#x3min = 0.0
+#x3max = 6.2831853071795862
+
+
+
+<meshblock>
+nx1        = 16        # Number of zones per MeshBlock in X1-direction
+nx2        = 16         # Number of zones per MeshBlock in X2-direction
+nx3        = 16         # Number of zones per MeshBlock in X3-direction
+
+<hydro>
+gamma           = 1.0001 #1.6666666666666667  # gamma = C_p/C_v
+iso_sound_speed = 1.0
+dfloor = 3.e-25
+pfloor = 3.e-12
+
+polar_average = true
+
+
+<problem>
+Ggrav           = 6.674e-8
+
+## orbit 
+sma             = 8.228e11
+ecc             = 0.0
+
+### planet
+M2              = 2.259e29
+mdot_planet     = 5e10
+lambda_planet = 3.0
+f_corotation_planet = 1.0
+radius_planet = 6.72e9  
+rsoft2      =   1.e9
+aniso_heat  =   false
+
+### star
+M1              = 1.3724e33
+mdot_star = 1.e12
+lambda_star = 10.0
+f_corotation_star = 0.0
+star_mode = 2 # 1=Accrete, 2=Wind
+
+### numerical
+corotating_frame = 1 # flag whether to do simulation in frame that rotates around COM at initial orbital frequency
+gas_backreaction = 0 # flag to include gas effect on orbit
+n_particle_substeps = 1 # how many particle integration substeps per timestep?
+
+## ambient "background"
+damb = 1.e-24
+pamb = 3.e-11
+
+### trackfile output 
+trackfile_dt = 1.e3  # dt for printing particle properties
+
+
