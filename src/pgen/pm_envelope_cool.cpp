@@ -195,7 +195,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Omega_orb_fixed = pin->GetOrAddReal("problem","omega_orb_fixed",0.5);
 
   // separation based ouput, triggered when dt=999. for an output type
-  dsep_output = pin->GetOrAddReal("problem","dsep_output",999.);
+  dsep_output = pin->GetOrAddReal("problem","dsep_output",1.0);
   Real output_next_sep_max = pin->GetOrAddReal("problem","output_next_sep_max",1.0);
   output_next_sep = output_next_sep_max;
 
