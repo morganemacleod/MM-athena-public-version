@@ -963,8 +963,9 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     if (Globals::my_rank == 0) {
       std::cout << "triggering user separation based output, d="<<d<<"\n";
     } 
+    output_next_sep = floor(d/dsep_output)*dsep_output; // rounds to the nearest lower sep
   }
-  output_next_sep = floor(d/dsep_output)*dsep_output; // rounds to the nearest lower sep
+  
   
   // sum the enclosed mass profile for monopole gravity
   if(ncycle%update_grav_every == 0){
