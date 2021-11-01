@@ -251,8 +251,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
   // Check the scalar count
-  if(NSCALARS != 7){
-    std::cout<<"COMPILED WITH "<<NSCALARS<<" SCALARS but 7 are required!!!";
+  if(NSCALARS != 8){
+    std::cout<<"COMPILED WITH "<<NSCALARS<<" SCALARS but 8 are required!!!";
   }
 
   // always write at startup
