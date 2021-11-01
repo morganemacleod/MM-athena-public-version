@@ -136,7 +136,7 @@ Real output_next_sep,dsep_output; // controling user forced output (set with dt=
 int update_grav_every;
 bool inert_bg;  // should the background respond to forces
 Real tau_relax_start;
-
+Real time_start;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -192,6 +192,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // background
   inert_bg = pin->GetOrAddBoolean("problem","inert_bg",false);
   
+  // start time 
+  time_start = pin->GetOrAddReal("time","start_time",0.0);
+
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -233,8 +236,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 
   // Check the scalar count
-  if(NSCALARS != 7){
-    std::cout<<"COMPILED WITH "<<NSCALARS<<" SCALARS but 7 are required!!!";
+  if(NSCALARS != 8){
+    std::cout<<"COMPILED WITH "<<NSCALARS<<" SCALARS but 8 are required!!!";
   }
 
   // always write at startup
@@ -272,7 +275,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     
 
   //ONLY enter ICs loop if this isn't a restart
-  if(time==0){
+  if(time-time_start==0){
     if(fixed_orbit){
       sma_fixed = pow((GM1+GM2+GMenv)/(Omega_orb_fixed*Omega_orb_fixed),1./3.);
       xi[0] = sma_fixed;
@@ -426,13 +429,13 @@ Real GetGM2factor(Real time){
   Real GM2_factor;
 
   // turn the gravity of the secondary on over time...
-  if(time<t_relax+t_mass_on){
-    if(time<t_relax){
+  if(time-time_start<t_relax+t_mass_on){
+    if(time-time_start<t_relax){
       // if t<t_relax, do not apply the acceleration of the secondary to the gas
       GM2_factor = 0.0;
     }else{
       // turn on the gravity of the secondary over the course of t_mass_on after t_relax
-      GM2_factor = (time-t_relax)/t_mass_on;
+      GM2_factor = (time-time_start-t_relax)/t_mass_on;
     }
   }else{
     // if we're outside of the relaxation times, turn the gravity of the secondary fully on
@@ -704,11 +707,11 @@ void MeshBlock::UserWorkInLoop(void)
 
   // if less than the relaxation time, apply 
   // a damping to the fluid velocities
-  if(time < t_relax){
+  if(time-time_start < t_relax){
     tau = tau_relax_start;
     Real dex = 2.0-log10(tau_relax_start);
-    if(time > 0.2*t_relax){
-      tau *= pow(10, dex*(time-0.2*t_relax)/(0.8*t_relax) );
+    if(time-time_start > 0.2*t_relax){
+      tau *= pow(10, dex*(time-time_start-0.2*t_relax)/(0.8*t_relax) );
     }
     if (Globals::my_rank==0){
       std::cout << "Relaxing: tau_damp ="<<tau<<std::endl;
@@ -729,7 +732,7 @@ void MeshBlock::UserWorkInLoop(void)
 	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
 	pscalars->s(7,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot     	
 
-	if (time<t_relax){
+	if (time-time_start<t_relax){
 	  Real vr  = phydro->u(IM1,k,j,i) / den;
 	  Real vth = phydro->u(IM2,k,j,i) / den;
 	  Real vph = phydro->u(IM3,k,j,i) / den;
@@ -836,7 +839,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     
   // EVOLVE THE ORBITAL POSITION OF THE SECONDARY
   // do this on rank zero, then broadcast
-  if (Globals::my_rank == 0 && time>t_relax){
+  if (Globals::my_rank == 0 && time-time_start>t_relax){
     if(fixed_orbit){
       Real theta_orb = Omega_orb_fixed*time;
       xi[0] = sma_fixed*std::cos(theta_orb);
@@ -912,7 +915,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   
   // sum the gas->part accel for the next step
-  if(include_gas_backreaction == 1 && time>t_relax){
+  if(include_gas_backreaction == 1 && time-time_start>t_relax){
     SumGasOnParticleAccels(pm, xi,agas1i,agas2i);
   }
   

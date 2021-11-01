@@ -466,7 +466,7 @@ Real GetGM2factor(Real time){
 /// Cooling functions
 Real kappa()
 {
-  return 1.0e-4;
+  return 1.0e-8;
 }
 
 Real scale_height_cool()
