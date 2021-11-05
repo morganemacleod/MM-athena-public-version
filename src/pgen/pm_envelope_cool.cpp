@@ -93,7 +93,7 @@ Real pspline(Real r, Real eps);
 bool instar(Real den, Real r);
 
 
-Real kappa();
+Real kappa(Real rho, Real T);
 Real scale_height_cool();
 
 
@@ -150,6 +150,8 @@ Real Lstar; // stellar luminosity
 Real sigmaSB = 5.67051e-5; //erg / cm^2 / K^4
 Real kB = 1.380658e-16; // erg / K
 Real mH = 1.6733e-24; // g
+Real X,Y,Z; // mass fractions composition
+
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -210,6 +212,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   cooling = pin->GetOrAddBoolean("problem","cooling",false);
   Lstar = pin->GetOrAddReal("problem","lstar",4.e33);
   
+  X = pin->GetOrAddReal("problem","X",0.7);
+  Z = pin->GetOrAddReal("problem","lstar",0.02);
+  Y = 1.0 - X - Z;
+
+
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -464,9 +471,16 @@ Real GetGM2factor(Real time){
 
 
 /// Cooling functions
-Real kappa()
+Real kappa(Real rho, Real T)
 {
-  return 1.0e-8;
+  // From G. Knapp A403 Princeton Course Notes
+  Real Kes = 0.2*(1.0+X);
+  Real Ke = 0.2*(1.0+X)/((1.0+2.7e11*rho/(T*T))*(1.0+ pow((T/4.5e8),0.86) ));
+  Real Kk = 4.e25*(1+X)*(Z+1.e-3)*rho*pow(T,-3.5);
+  Real Khm = 1.1e-25*sqrt(Z) *sqrt(rho) * pow(T,7.7);
+  Real Km = 0.1*Z;
+  Real Krad = Km + 1.0/(1.0/Khm + 1.0/(Ke+Kk) );
+  return Krad;
 }
 
 Real scale_height_cool()
@@ -643,17 +657,19 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
 	if(cooling){
 	  Real denr0 = pmb->pscalars->r(0,k,j,i) * den;
 	  Real Sigma = std::max(denr0*scale_height_cool(),mH);
-	  Real kap = kappa();
-	  Real tau = Sigma*kap;	  
 	  
 	  Real Teq = pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
 	  Real mu = 1.0;
 	  Real Temp = prim(IPR,k,j,i) * mu * mH / (den * kB);
+
+	  Real kap = kappa(denr0,Temp);
+	  Real tau = Sigma*kap;	  
+	  
 	  Real ueq = kB*Teq/(mu*mH*(gamma_gas-1));  // erg/g
 	  Real u = prim(IPR,k,j,i)/(den*(gamma_gas-1)); // erg/g
 	  	  
 	  Real dudt = 4.0*sigmaSB*( pow(Teq,4) - pow(Temp,4))/(Sigma*tau + 1/kap);  //erg/g/s
-	  Real t_therm = std::max( std::abs((ueq-u)/dudt) , 100.0*(pmb->pmy_mesh->dt) );
+	  Real t_therm = std::max( std::abs((ueq-u)/dudt) , 10.0*(pmb->pmy_mesh->dt) );
 	  
 	  Real exp_step = 1.0 - exp(-(pmb->pmy_mesh->dt) / t_therm);
 	  
