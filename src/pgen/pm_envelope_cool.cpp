@@ -94,7 +94,6 @@ bool instar(Real den, Real r);
 
 
 Real kappa(Real rho, Real T);
-Real scale_height_cool();
 
 
 
@@ -483,10 +482,6 @@ Real kappa(Real rho, Real T)
   return Krad;
 }
 
-Real scale_height_cool()
-{
-  return 7.0e10; 
-}
 
 
 
@@ -656,7 +651,9 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
 	// APPLY LOCAL COOLING FUNCTION
 	if(cooling){
 	  Real denr0 = pmb->pscalars->r(0,k,j,i) * den;
-	  Real Sigma = std::max(denr0*scale_height_cool(),mH);
+	  Real Hp = std::abs(prim(IPR,k,j,i)/( (prim(IPR,k,j,i+1)-prim(IPR,k,j,i-1))/(pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1)) ));
+	  Hp = std::max(Hp,0.5*(pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1)) );
+	  Real Sigma = std::max(denr0*Hp,mH);
 	  
 	  Real Teq = pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
 	  Real mu = 1.0;
