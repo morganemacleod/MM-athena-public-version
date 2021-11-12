@@ -139,7 +139,7 @@ Real output_next_sep,dsep_output; // controling user forced output (set with dt=
 
 int update_grav_every;
 bool inert_bg;  // should the background respond to forces
-Real tau_relax_start;
+Real tau_relax_start,tau_relax_end;
 Real rstar_initial;
 
 
@@ -176,6 +176,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
   tau_relax_start = pin->GetOrAddReal("problem","tau_relax_start",1.0);
+  tau_relax_end = pin->GetOrAddReal("problem","tau_relax_end",100.0);
   t_mass_on = pin->GetOrAddReal("problem","t_mass_on",0.0);
   corotating_frame = pin->GetInteger("problem","corotating_frame");
 
@@ -783,7 +784,7 @@ void MeshBlock::UserWorkInLoop(void)
   // a damping to the fluid velocities
   if(time < t_relax){
     tau = tau_relax_start;
-    Real dex = 2.0-log10(tau_relax_start);
+    Real dex = log10(tau_relax_end)-log10(tau_relax_start);
     if(time > 0.2*t_relax){
       tau *= pow(10, dex*(time-0.2*t_relax)/(0.8*t_relax) );
     }
