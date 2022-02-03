@@ -747,10 +747,10 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
    	// set the momenta components
 	phydro->u(IM1,k,j,i) = 0.0;
 	phydro->u(IM2,k,j,i) = 0.0;
-	if(r <= 1.0){
+	if(r <= rstar_initial){
 	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl - Omega[2]*Rcyl);
 	}else{
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th/Rcyl - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th*rstar_initial*rstar_initial/Rcyl - Omega[2]*Rcyl);
 	}
 	  
 	//set the energy 
