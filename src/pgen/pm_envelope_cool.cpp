@@ -151,7 +151,7 @@ Real kB = 1.380658e-16; // erg / K
 Real mH = 1.6733e-24; // g
 Real X,Y,Z; // mass fractions composition
 
-int rotation_mode; // setting for rotation 1 = solid body, 2 = experimental, differential
+//int rotation_mode; // setting for rotation 1 = solid body, 2 = experimental, differential
 Real eps_rot;
 
 //======================================================================================
@@ -219,8 +219,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Y = 1.0 - X - Z;
 
   // rotation mode
-  rotation_mode = pin->GetOrAddInteger("problem","rotation_mode",1);
-  eps_rot = pin->GetOrAddReal("problem","eps_rot",1.0);
+  //rotation_mode = pin->GetOrAddInteger("problem","rotation_mode",1);
+  eps_rot = pin->GetOrAddReal("problem","eps_rot",0.0);
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -752,14 +752,11 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	
 	if(r <= rstar_initial){
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl*(1.0 - eps_rot*cos_th*cos_th) - Omega[2]*Rcyl);
 	}else{
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th*rstar_initial*rstar_initial/Rcyl - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th*rstar_initial*rstar_initial/Rcyl*(1.0 - eps_rot*cos_th*cos_th) - Omega[2]*Rcyl);
 	}
-	if(rotation_mode == 2){
-	  phydro->u(IM3,k,j,i) *= (1.0 - eps_rot*cos_th*cos_th);
-	}
-   
+
 	//set the energy 
 	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
