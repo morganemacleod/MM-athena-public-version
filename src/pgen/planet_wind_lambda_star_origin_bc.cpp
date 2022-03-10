@@ -49,10 +49,8 @@ void AccreteInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,Fa
 
 
 
-void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
-		  const AthenaArray<Real> &prim,
-		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
-		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar); 
+void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
+                  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
 void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
@@ -98,6 +96,8 @@ Real r_inner;
 
 Real rho_surface_planet, lambda_planet, radius_planet; //planet surface variables
 bool aniso_heat;
+Real rp_aniso_inner;
+Real p_night;
 Real omega_planet, omega_star; // rotation of planet and star boundaries
 
 //bool initialize_planet_wind; // true=planetary wind backgorund ic, false stellar wind ic background
@@ -107,8 +107,10 @@ Real da,pa;
 //Real threshold, dscale; // for AMR
 
 int star_mode; // setting for the stellar BC
+Real vr_planet, vr_star;
 
 Real scalar_val=1.e-10;
+
 
 
 //======================================================================================
@@ -133,15 +135,21 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   corotating_frame = pin->GetInteger("problem","corotating_frame");
+    
+  p_night = pin->GetReal("problem","p_night");
+  rp_aniso_inner = pin->GetReal("problem","rp_aniso_inner");
 
   trackfile_dt = pin->GetOrAddReal("problem","trackfile_dt",0.01);
   n_particle_substeps = pin->GetInteger("problem","n_particle_substeps");
 
   //rho_surface_star = pin->GetOrAddReal("problem","rho_surface_star",1.e-15);
+  Real mdot_star   = pin->GetReal("problem","mdot_star");
   lambda_star = pin->GetOrAddReal("problem","lambda_star",5.0);
   star_mode   = pin->GetInteger("problem","star_mode");
+  
 
   //rho_surface_planet = pin->GetOrAddReal("problem","rho_surface_planet",1.e-15);
+  Real mdot_planet = pin->GetReal("problem","mdot_planet");
   lambda_planet = pin->GetOrAddReal("problem","lambda_planet",5.0);
   radius_planet = pin->GetOrAddReal("problem","radius_planet",6.955e10);
   aniso_heat    = pin->GetOrAddBoolean("problem","aniso_heat",false);
@@ -157,8 +165,6 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Real ecc = pin->GetOrAddReal("problem","ecc",0.0);
   Real f_corot_planet = pin->GetOrAddReal("problem","f_corotation_planet",1.0);
   Real f_corot_star   = pin->GetOrAddReal("problem","f_corotation_star",1.0);
-  Real mdot_planet = pin->GetReal("problem","mdot_planet");
-  Real mdot_star   = pin->GetReal("problem","mdot_star");
   Real Omega_orb, vcirc;
 
   // set star/planet surface density
@@ -166,6 +172,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   rho_surface_star = mdot_star / (3.14159*sqrt(GM1*pow(r_inner*lambda_star,3))*exp(1.5-lambda_star) );
   rho_surface_planet = mdot_planet / (3.14159*sqrt(GM2*pow(radius_planet*lambda_planet,3))*exp(1.5-lambda_planet) );
   
+  vr_star = 0.0; //mdot_star/(4*3.14159*r_inner*r_inner*rho_surface_star);
+  vr_planet = 0.0; //mdot_planet/(4.*3.14159*radius_planet*radius_planet*rho_surface_planet);
   
   // allocate MESH data for the particle pos/vel, Omega frame, omega_planet & omega_star
   AllocateRealUserMeshDataField(4);
@@ -275,14 +283,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "lambda (star) = "<< lambda_star <<"\n";
     std::cout << "press_surface (star) =" << rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star) <<"\n";
     std::cout << "sound speed surface (star) =" << sqrt(GM1/(r_inner*lambda_star)) <<"\n";
-    std::cout << "temperature_surface (star) =" << 0.61 *(rho_surface_star*GM1/(r_inner*gamma_gas*lambda_star)) / ( rho_surface_star * 8.3145e7) <<"\n";
     std::cout << "estimated mdot (star) = "<<3.14159*rho_surface_star*sqrt(GM1*pow(r_inner*lambda_star,3))*exp(1.5-lambda_star) <<"\n";
     std::cout << "rho_surface (planet) = "<< rho_surface_planet <<"\n";
     std::cout << "lambda (planet) = "<< lambda_planet <<"\n";
     std::cout << "aniso_heat (planet) =" << aniso_heat << "\n";
+    std::cout << "p_night ="<< p_night <<"\n";
+    std::cout << "rp_aniso_inner ="<< rp_aniso_inner <<"\n";
     std::cout << "press_surface (planet) =" << rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet) <<"\n";
     std::cout << "sound speed surface (star) =" << sqrt(GM2/(r_inner*lambda_planet)) <<"\n";
-    std::cout << "temperature_surface (planet) =" << 0.61 * (rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet)) / ( rho_surface_planet * 8.3145e7) <<"\n";
     std::cout << "estimated mdot (planet) = "<<3.14159*rho_surface_planet*sqrt(GM2*pow(radius_planet*lambda_planet,3))*exp(1.5-lambda_planet) <<"\n";
     std::cout << "==========================================================\n";
     std::cout << "==========   Particle        =============================\n";
@@ -304,22 +312,34 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 Real press_factor_aniso(Real d2, Real solar_angle)
 {
   Real press_factor = 1.0;
-  Real press_factor_aniso = std::max(0.01, std::cos(solar_angle));
+  Real press_factor_aniso = 1.0;
+  Real amplitude_scale = (1-p_night)/2;
+  Real linear_slope_radial = 1.0;
   if (aniso_heat){
-    if(d2<= 0.3*radius_planet){
-      press_factor = 1.0;
-    }else if(d2 <= 0.7*radius_planet){
-      press_factor = 1.0 + (press_factor_aniso-1.0)/(0.4*radius_planet)*(d2 - 0.5*radius_planet);
-    }else if(d2<=radius_planet){
-      press_factor = press_factor_aniso;
-    }else{
-      press_factor = 1.0;
-    }
-  } 
+    // defines the pressure scaling according to solar angle;
+    // press_factor = 1 at day-side (0-90 and 270-360 deg);
+    if (solar_angle<=1.57080){
+        press_factor_aniso = amplitude_scale * std::cos(2 * solar_angle) + amplitude_scale + p_night;
+      }else if(solar_angle>=4.71239){
+        press_factor_aniso = amplitude_scale * std::cos(2 * solar_angle) + amplitude_scale + p_night;
+    //press_factor = p_night at night-side.
+      }else{
+        press_factor_aniso = p_night;
+      }
+    // defines the pressure scaling according to radial distance to planet center;
+    // press_factor = 1 for the very inner region; if you change the factor before radius_planet,
+      if(d2<=rp_aniso_inner){
+        press_factor = 1.0;
+    // linear scaling from 1 (at center) to press_factor_aniso (at r = Rp)
+      }else if(d2<=radius_planet){
+        linear_slope_radial = -(1 - press_factor_aniso) / (radius_planet - rp_aniso_inner);
+        press_factor = linear_slope_radial * d2 + 1 - linear_slope_radial * rp_aniso_inner;
+      }else{
+        press_factor = 1.0;
+      }
+  }
   return press_factor;
 }
-
-
 
 
 
@@ -414,9 +434,12 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  pres = press_surface_planet * pow(den / rho_surface_planet, gamma_gas);
 	  // wind directed outward at v=cs
 	  // constant angular momentum of surface
-	  vx = (x-xi[0])/d2 * cs_planet + vi[0] - sin(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	  vy = (y-xi[1])/d2 * cs_planet + vi[1] + cos(phi2)*(omega_star*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*Rcyl);  
-	  vz = (z-xi[2])/d2 * cs_planet + vi[2];
+	  //vx = (x-xi[0])/d2 * cs_planet + vi[0] - sin(phi2)*(omega_planet*radius_planet*radius_planet*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*R2);  
+	  //vy = (y-xi[1])/d2 * cs_planet + vi[1] + cos(phi2)*(omega_planet*radius_planet*radius_planet*std::sin(th2)*std::sin(th2)/R2 - Omega[2]*R2);  
+	  //vz = (z-xi[2])/d2 * cs_planet + vi[2];
+	  vx = vi[0];
+	  vy = vi[1];
+	  vz = vi[2];
 	  vr  = sin(th)*cos(ph)*vx + sin(th)*sin(ph)*vy + cos(th)*vz;
 	  vth = cos(th)*cos(ph)*vx + cos(th)*sin(ph)*vy - sin(th)*vz;
 	  vph = -sin(ph)*vx + cos(ph)*vy;
@@ -428,17 +451,18 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 	  vph = 0.0; //- Omega[2]*Rcyl;
 	}
 	
+	/*
 	// Near star, if there is a wind BC
 	if((r<sma/2) && (star_mode==2)  ){
 	  // wind directed outward at v=cs outside of sonic point, linear increase to sonic point
 	  // constant angular momentum of surface
 	  den = rho_surface_star * pow((r/r_inner),-8);
 	  pres = press_surface_star * pow(den / rho_surface_star, gamma_gas);
-	  vr = cs_star * std::min(r/(lambda_star/2. * r_inner), 1.0);  
+	  vr = sqrt(2*GM1/r); //cs_star; // * std::min(r/(lambda_star/2. * r_inner), 1.0);  
 	  vth = 0.0;
 	  vph = omega_star*SQR(r_inner*sin_th)/Rcyl - Omega[2]*Rcyl;
 	}
-
+	*/
 	
 	
 	phydro->u(IDN,k,j,i) = std::max(den,da);
@@ -460,10 +484,8 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 
 // Source Function for two point masses
-void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
-		  const AthenaArray<Real> &prim,
-		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
-		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar)
+void StarPlanetWinds(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
 { 
 
   if(is_restart>0){
@@ -796,9 +818,9 @@ void MeshBlock::UserWorkInLoop(void) {
 	 
 	  Real press_surface_planet = rho_surface_planet*GM2/(radius_planet*gamma_gas*lambda_planet);
 	  Real cs = std::sqrt(gamma_gas *press_surface_planet/rho_surface_planet);
-	  Real vx = vi[0] - sin(phi2)*(omega_planet-Omega[2])*R2;
-	  Real vy = vi[1] + cos(phi2)*(omega_planet-Omega[2])*R2;
-	  Real vz = vi[2];
+	  Real vx = vi[0] - sin(phi2)*(omega_planet-Omega[2])*R2 + vr_planet*(x-xi[0])/d2;
+	  Real vy = vi[1] + cos(phi2)*(omega_planet-Omega[2])*R2 + vr_planet*(y-xi[1])/d2;
+	  Real vz = vi[2] + vr_planet*(z-xi[2])/d2;
 
 	  // convert back to spherical polar
 	  Real vr  = sin_th*cos_ph*vx + sin_th*sin_ph*vy + cos_th*vz;
@@ -860,7 +882,6 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   Real ai[3];
   Real mg;
-  Mesh *pm = my_blocks(0)->pmy_mesh;
   
   // kick the initial conditions back a half step (v^n-1/2)
   if(ncycle==0){
@@ -895,7 +916,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // write the output to the trackfile
   if(time >= trackfile_next_time || user_force_output ){
-    WritePMTrackfile(pm,pin);
+    WritePMTrackfile(pblock->pmy_mesh,pin);
   }
   
 }
@@ -1034,12 +1055,12 @@ void WindInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim, Face
       for (int i=1; i<=ngh; ++i) {
 	Real r = pco->x1v(il-i);
 	prim(IDN,k,j,il-i) = rho_surface_star;
-	prim(IVX,k,j,il-i) = 0.0;
+	prim(IVX,k,j,il-i) = vr_star;
 	prim(IVY,k,j,il-i) = 0.0;
 	prim(IVZ,k,j,il-i) = r*sin_th*(omega_star-Omega[2]);
 	prim(IPR,k,j,il-i) = rho_surface_star*GM1/(r*gamma_gas*lambda_star);
-	pmb->pscalars->s(0,k,j,il-i) = scalar_val*prim(IDN,k,j,il-i);
-	pmb->pscalars->s(1,k,j,il-i) = 1.0*prim(IDN,k,j,il-i);
+	pmb->pscalars->r(0,k,j,il-i) = scalar_val;
+	pmb->pscalars->r(1,k,j,il-i) = 1.0;
       }
     }
   }
@@ -1161,3 +1182,4 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]){
   AxB[1] = A[2]*B[0] - A[0]*B[2];
   AxB[2] = A[0]*B[1] - A[1]*B[0];
 }
+
