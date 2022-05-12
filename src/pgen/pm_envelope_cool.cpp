@@ -140,7 +140,7 @@ Real output_next_sep,dsep_output; // controling user forced output (set with dt=
 int update_grav_every;
 bool inert_bg;  // should the background respond to forces
 Real tau_relax_start,tau_relax_end;
-Real rstar_initial;
+Real rstar_initial,mstar_initial;
 
 
 bool cooling; // whether to apply cooling function or not
@@ -205,7 +205,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
-  rstar_initial = pin->GetOrAddReal("problem","rstar_initial",1.0);
+  rstar_initial = pin->GetReal("problem","rstar_initial");  // FOR RESCALING OF STELLAR PROFILE
+  mstar_initial = pin->GetReal("problem","mstar_initial");
   
   // background
   inert_bg = pin->GetOrAddBoolean("problem","inert_bg",false);
@@ -279,6 +280,14 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     //std:: cout << rad[i] << "    " << rho[i] << std::endl;
   }
   infile.close();
+
+  // RESCALE
+  for(int i=0;i<NARRAY;i++){
+    rad[i] = rad[i]*rstar_initial;
+    rho[i] = rho[i]*mstar_initial/pow(rstar_initial,3);
+    p[i]   = p[i]*Ggrav*pow(mstar_initial,2)/pow(rstar_initial,4);
+    menc_init[i] = menc_init[i]*mstar_initial;
+  }
 
   
   
