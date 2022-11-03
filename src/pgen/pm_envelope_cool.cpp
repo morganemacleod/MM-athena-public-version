@@ -95,6 +95,7 @@ bool instar(Real den, Real r);
 
 Real kappa(Real rho, Real T);
 
+void updateGM2(Real sep);
 
 
 // global (to this file) problem parameters
@@ -103,7 +104,7 @@ Real da,pa; // ambient density, pressure
 Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc_init[NARRAY];  // initial profile
 Real logr[NGRAV],menc[NGRAV]; // enclosed mass profile
 
-Real GM2, GM1; // point masses
+Real GM2, GM1,GM2i; // point masses
 Real rsoft2; // softening length of PM 2
 Real t_relax,t_mass_on; // time to damp fluid motion, time to turn on M2 over
 int  include_gas_backreaction, corotating_frame; // flags for output, gas backreaction on EOM, frame choice
@@ -154,6 +155,9 @@ Real X,Y,Z; // mass fractions composition
 //int rotation_mode; // setting for rotation 1 = solid body, 2 = experimental, differential
 Real eps_rot;
 
+bool update_gm2_sep; //change gm2 as a function of separation
+Real dmin = 1.e99;
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -174,6 +178,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Ggrav = pin->GetOrAddReal("problem","Ggrav",6.67408e-8);
   GM2 = pin->GetOrAddReal("problem","GM2",0.0);
   //GM1 = pin->GetOrAddReal("problem","GM1",1.0);
+  GM2i = GM2; // set initial GM2
 
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
@@ -222,6 +227,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // rotation mode
   //rotation_mode = pin->GetOrAddInteger("problem","rotation_mode",1);
   eps_rot = pin->GetOrAddReal("problem","eps_rot",0.0);
+
+  // gm2 decrease
+  update_gm2_sep = pin->GetOrAddBoolean("problem","update_gm2_sep",false);
+  
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -387,8 +396,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "GM1 = "<< GM1 <<"\n";
     std::cout << "GM2 = "<< GM2 <<"\n";
     std::cout << "GMenv="<< GMenv << "\n";
+    std::cout << "rstar_initial = "<< rstar_initial<<"\n";
+    std::cout << "mstar_initial = "<< mstar_initial<<"\n";
     std::cout << "Omega_orb="<< Omega_orb << "\n";
     std::cout << "Omega_env="<< Omega_envelope << "\n";
+    std::cout << "vphi_eq = "<< Omega_envelope*rstar_initial<<"\n";
     std::cout << "a = "<< sma <<"\n";
     std::cout << "e = "<< ecc <<"\n";
     std::cout << "P = "<< 6.2832*sqrt(sma*sma*sma/(GM1+GM2+GMenv)) << "\n";
@@ -479,6 +491,10 @@ Real GetGM2factor(Real time){
   }
   
   return GM2_factor;
+}
+
+void updateGM2(Real sep){
+  GM2 = GM2i*std::min(sep/rstar_initial, 1.0); // linear decrease with separation
 }
 
 
@@ -968,6 +984,10 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   // check the separation stopping conditions
   Real d = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2] );
+  if(d<dmin){
+    dmin=d;
+  }
+
   if (d<separation_stop_min){ 
     if (Globals::my_rank == 0) {
       std::cout << "### Stopping because binary separation d<separation_stop_min" << std::endl
@@ -1005,6 +1025,10 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     }
   }
 
+  // modify GM2 if needed
+  if(update_gm2_sep){
+    updateGM2(dmin);
+  }
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
@@ -1679,10 +1703,10 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  if(instar(phyd->u(IDN,k,j,i),r)==true){
 	    M_star += dm;
 	  }
-	  if(r<1.0){
+	  if(r<1.0*rstar_initial){
 	    mr1 += dm;
 	  }
-	  if(r<1.2){
+	  if(r<1.2*rstar_initial){
 	    mr12 += dm;
 	  }
 
@@ -2045,5 +2069,5 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]){
 
 
 bool instar(Real den, Real r){
-  return ((den>1.e-4) & (r<2));
+  return ((den>1.e-3*mstar_initial/pow(rstar_initial,3) ) & (r<2*rstar_initial));
 }
