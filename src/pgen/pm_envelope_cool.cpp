@@ -153,7 +153,7 @@ Real mH = 1.6733e-24; // g
 Real X,Y,Z; // mass fractions composition
 
 //int rotation_mode; // setting for rotation 1 = solid body, 2 = experimental, differential
-Real eps_rot;
+bool diff_rot_exp;
 
 bool update_gm2_sep; //change gm2 as a function of separation
 Real dmin = 1.e99;
@@ -226,7 +226,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // rotation mode
   //rotation_mode = pin->GetOrAddInteger("problem","rotation_mode",1);
-  eps_rot = pin->GetOrAddReal("problem","eps_rot",0.0);
+  //eps_rot = pin->GetOrAddReal("problem","eps_rot",0.0);
+  diff_rot_exp = pin->GetOrAddReal("problem","diff_rot_exp",0.0);
 
   // gm2 decrease
   update_gm2_sep = pin->GetOrAddBoolean("problem","update_gm2_sep",false);
@@ -777,9 +778,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	
 	if(r <= rstar_initial){
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl*(1.0 - eps_rot*cos_th*cos_th) - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl*pow(Rcyl/rstar_initial,diff_rot_exp) - Omega[2]*Rcyl);
 	}else{
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th*rstar_initial*rstar_initial/Rcyl*(1.0 - eps_rot*cos_th*cos_th) - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*pow(rstar_initial*sin_th,2)/Rcyl*pow(sin_th,diff_rot_exp) - Omega[2]*Rcyl);
 	}
 
 	//set the energy 
