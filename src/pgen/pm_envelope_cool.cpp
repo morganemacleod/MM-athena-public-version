@@ -778,9 +778,9 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	
 	if(r <= rstar_initial){
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl*pow(Rcyl/rstar_initial,diff_rot_exp) - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl - Omega[2]*Rcyl);
 	}else{
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*pow(rstar_initial*sin_th,2)/Rcyl*pow(sin_th,diff_rot_exp) - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*pow(rstar_initial*sin_th,2)/Rcyl - Omega[2]*Rcyl);
 	}
 
 	//set the energy 
@@ -836,6 +836,7 @@ void MeshBlock::UserWorkInLoop(void)
       //Real cos_th = cos(th);
       for (int i=is; i<=ie; i++) {
 	Real r = pcoord->x1v(i);
+	Real Rcyl = r*sin(th);
 	Real den = phydro->u(IDN,k,j,i);
 	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
 	pscalars->s(7,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot     	
@@ -844,11 +845,16 @@ void MeshBlock::UserWorkInLoop(void)
 	  Real vr  = phydro->u(IM1,k,j,i) / den;
 	  Real vth = phydro->u(IM2,k,j,i) / den;
 	  Real vph = phydro->u(IM3,k,j,i) / den;
-	  
+	  Real vphEnv = Omega_envelope*Rcyl - Omega[2]*Rcyl;
+	  Real vphBg = Omega_envelope*pow(rstar_initial*sin(th),2)/Rcyl - Omega[2]*Rcyl;
+	  Real vphZone = vphBg + pscalars->r(0,k,j,i)*(vphEnv - vphBg);
+
 	  Real a_damp_r =  - vr/tau;
 	  Real a_damp_th = - vth/tau;
-	  Real a_damp_ph = 0.0;
-	  
+	  Real a_damp_ph = - (vph-vphZone)/tau;
+	  //if(pscalars->r(0,k,j,i)>1.e-5){
+	  //  a_damp_ph = - (vph-vphEnv)/tau * pscalars->r(0,k,j,i);
+	  //}
 	  phydro->u(IM1,k,j,i) += dt*den*a_damp_r;
 	  phydro->u(IM2,k,j,i) += dt*den*a_damp_th;
 	  phydro->u(IM3,k,j,i) += dt*den*a_damp_ph;

@@ -123,6 +123,7 @@ private:
 
   // MM:zone-averaging                                                              
   bool do_average_;
+  int polar_avg_mode;
   AthenaArray<int> n_avg_;
 
 };

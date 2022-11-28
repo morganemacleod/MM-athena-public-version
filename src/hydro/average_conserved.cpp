@@ -24,7 +24,7 @@
 #endif
 
 //MM
-int POLAR_AVERAGE=2; // hard-coding this here for now
+//int POLAR_AVERAGE=2; // hard-coding this here for now
 
 //----------------------------------------------------------------------------------------
 //! \fn  void Hydro::PhiAverageConserved
@@ -49,7 +49,7 @@ void Hydro::PhiAverageConserved(AthenaArray<Real> &u_in,AthenaArray<Real> &u_out
 
   // Mode 1: average v_r, v_th, v_phi each as a scalar (v is momentum)
   // After average, each cell has the same IM1,2,3.
-  if (POLAR_AVERAGE == 1) {
+  if (polar_avg_mode == 1) {
     for (int n=0; n<NHYDRO; ++n) {
       for (int j=js; j<=je; ++j) {
         int n_avg_loops = pmb->block_size.nx3/n_avg_(j);
@@ -73,7 +73,7 @@ void Hydro::PhiAverageConserved(AthenaArray<Real> &u_in,AthenaArray<Real> &u_out
 
   // Mode 2: average v as a vector
   // After average, each cell has the same v vector (but in general different IM1,2,3).
-  else if (POLAR_AVERAGE == 2){
+  else if (polar_avg_mode == 2){
     for (int j=js; j<=je; ++j) {
       int n_avg_loops = pmb->block_size.nx3/n_avg_(j);
       Real sin_th = sin(pmb->pcoord->x2v(j));
