@@ -845,7 +845,7 @@ void MeshBlock::UserWorkInLoop(void)
 	  Real vr  = phydro->u(IM1,k,j,i) / den;
 	  Real vth = phydro->u(IM2,k,j,i) / den;
 	  Real vph = phydro->u(IM3,k,j,i) / den;
-	  Real vphEnv = Omega_envelope*Rcyl - Omega[2]*Rcyl;
+	  Real vphEnv = Omega_envelope*std::min(Rcyl,1.5*rstar_initial) - Omega[2]*Rcyl;
 	  Real vphBg = Omega_envelope*pow(rstar_initial*sin(th),2)/Rcyl - Omega[2]*Rcyl;
 	  Real vphZone = vphBg + pscalars->r(0,k,j,i)*(vphEnv - vphBg);
 
