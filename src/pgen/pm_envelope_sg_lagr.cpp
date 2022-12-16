@@ -720,12 +720,12 @@ void MeshBlock::UserWorkInLoop(void)
 
   for (int k=ks; k<=ke; k++) {
     Real ph= pcoord->x3v(k);
-    //Real sin_ph = sin(ph);
-    //Real cos_ph = cos(ph);
+    Real sin_ph = sin(ph);
+    Real cos_ph = cos(ph);
     for (int j=js; j<=je; j++) {
       Real th= pcoord->x2v(j);
-      //Real sin_th = sin(th);
-      //Real cos_th = cos(th);
+      Real sin_th = sin(th);
+      Real cos_th = cos(th);
       for (int i=is; i<=ie; i++) {
 	Real r = pcoord->x1v(i);
 	Real den = phydro->u(IDN,k,j,i);
@@ -759,7 +759,28 @@ void MeshBlock::UserWorkInLoop(void)
 	  pscalars->s(6,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot
 	
 	}//end time<t_relax
-	
+
+	// spherical polar coordinates, get local cartesian                                                                                                                                     
+	Real x = r*sin_th*cos_ph;
+	Real y = r*sin_th*sin_ph;
+	Real z = r*cos_th;
+
+	Real d2 = sqrt(pow(x-xi[0], 2) +
+		       pow(y-xi[1], 2) +
+		       pow(z-xi[2], 2) );
+
+	if(d2<rsoft2){
+	  Real tau2 = sqrt(pow(rsoft2,3)/GM2)*(1.0+1e3*pow(d2/rsoft2,3));
+	  tau2 = std::max(10*dt,tau2);
+
+          phydro->u(IM1,k,j,i) -= dt*phydro->u(IM1,k,j,i)/tau2;
+          phydro->u(IM2,k,j,i) -= dt*phydro->u(IM2,k,j,i)/tau2;
+          phydro->u(IM3,k,j,i) -= dt*phydro->u(IM3,k,j,i)/tau2;
+
+          phydro->u(IEN,k,j,i) += dt*SQR(phydro->u(IM1,k,j,i))/(den*tau2) + dt*SQR(phydro->u(IM2,k,j,i))/(den*tau2) + dt*SQR(phydro->u(IM3,k,j,i))/(den*tau2);
+	    
+	}// if close to secondary
+
       }
     }
   } // end loop over cells                   

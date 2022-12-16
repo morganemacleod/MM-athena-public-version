@@ -146,6 +146,8 @@ Real rstar_initial,mstar_initial;
 
 bool cooling; // whether to apply cooling function or not
 Real Lstar; // stellar luminosity
+Real mykappa;
+Real fvir;
 
 Real sigmaSB = 5.67051e-5; //erg / cm^2 / K^4
 Real kB = 1.380658e-16; // erg / K
@@ -219,7 +221,9 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // cooling parameters
   cooling = pin->GetOrAddBoolean("problem","cooling",false);
   Lstar = pin->GetOrAddReal("problem","lstar",4.e33);
-  
+  mykappa = pin->GetOrAddReal("problem","kappa",1e-3);
+  fvir = pin->GetOrAddReal("problem","fvir",0.1);
+
   X = pin->GetOrAddReal("problem","X",0.7);
   Z = pin->GetOrAddReal("problem","Z",0.02);
   Y = 1.0 - X - Z;
@@ -232,6 +236,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // gm2 decrease
   update_gm2_sep = pin->GetOrAddBoolean("problem","update_gm2_sep",false);
   
+
+ 
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -504,13 +510,14 @@ void updateGM2(Real sep){
 Real kappa(Real rho, Real T)
 {
   // From G. Knapp A403 Princeton Course Notes
-  Real Kes = 0.2*(1.0+X);
-  Real Ke = 0.2*(1.0+X)/((1.0+2.7e11*rho/(T*T))*(1.0+ pow((T/4.5e8),0.86) ));
-  Real Kk = 4.e25*(1+X)*(Z+1.e-3)*rho*pow(T,-3.5);
-  Real Khm = 1.1e-25*sqrt(Z) *sqrt(rho) * pow(T,7.7);
-  Real Km = 0.1*Z;
-  Real Krad = Km + 1.0/(1.0/Khm + 1.0/(Ke+Kk) );
-  return Krad;
+  //Real Kes = 0.2*(1.0+X);
+  //Real Ke = 0.2*(1.0+X)/((1.0+2.7e11*rho/(T*T))*(1.0+ pow((T/4.5e8),0.86) ));
+  //Real Kk = 4.e25*(1+X)*(Z+1.e-3)*rho*pow(T,-3.5);
+  //Real Khm = 1.1e-25*sqrt(Z) *sqrt(rho) * pow(T,7.7);
+  //Real Km = 0.1*Z;
+  // Real Krad = Km + 1.0/(1.0/Khm + 1.0/(Ke+Kk) );
+  //return Krad;
+  return mykappa;
 }
 
 
@@ -682,15 +689,17 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
 	// APPLY LOCAL COOLING FUNCTION
 	if(cooling){
 	  Real denr0 = pmb->pscalars->r(0,k,j,i) * den;
-	  Real Hp = std::abs(prim(IPR,k,j,i)/( (prim(IPR,k,j,i+1)-prim(IPR,k,j,i-1))/(pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1)) ));
-	  Hp = std::max(Hp,0.5*(pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1)) );
-	  Real Sigma = std::max(denr0*Hp,mH);
+	  //Real Hp = std::abs(prim(IPR,k,j,i)/( (prim(IPR,k,j,i+1)-prim(IPR,k,j,i-1))/(pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1)) ));
+	  //Hp = std::max(Hp,pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1) );
 	  
-	  Real Teq = pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
-	  Real mu = 1.0;
+	  Real Sigma = std::max(denr0*rstar_initial,mH);
+    
+	  
+	  Real mu = 0.61;
 	  Real Temp = prim(IPR,k,j,i) * mu * mH / (den * kB);
+	  Real Teq = fvir*GMenc1*mu*mH/(kB*r);  //pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
 
-	  Real kap = kappa(denr0,Temp);
+	  Real kap = kappa(den,Temp);
 	  Real tau = Sigma*kap;	  
 	  
 	  Real ueq = kB*Teq/(mu*mH*(gamma_gas-1));  // erg/g
