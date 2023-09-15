@@ -64,6 +64,7 @@ void kick(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
 void drift(Real dt,Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]);
 
 int RefinementCondition(MeshBlock *pmb);
+int RefinementConditionR0(MeshBlock *pmb);
 
 void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]);
 
@@ -93,13 +94,18 @@ Real pspline(Real r, Real eps);
 bool instar(Real den, Real r);
 
 
+Real kappa(Real rho, Real T);
+
+void updateGM2(Real sep);
+
+
 // global (to this file) problem parameters
 Real gamma_gas; 
 Real da,pa; // ambient density, pressure
 Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc_init[NARRAY];  // initial profile
 Real logr[NGRAV],menc[NGRAV]; // enclosed mass profile
 
-Real GM2, GM1; // point masses
+Real GM2, GM1,GM2i; // point masses
 Real rsoft2; // softening length of PM 2
 Real t_relax,t_mass_on; // time to damp fluid motion, time to turn on M2 over
 int  include_gas_backreaction, corotating_frame; // flags for output, gas backreaction on EOM, frame choice
@@ -135,8 +141,25 @@ Real output_next_sep,dsep_output; // controling user forced output (set with dt=
 
 int update_grav_every;
 bool inert_bg;  // should the background respond to forces
-Real tau_relax_start;
-Real time_start;
+Real tau_relax_start,tau_relax_end;
+Real rstar_initial,mstar_initial;
+
+
+bool cooling; // whether to apply cooling function or not
+Real Lstar; // stellar luminosity
+Real mykappa;
+Real fvir;
+
+Real sigmaSB = 5.67051e-5; //erg / cm^2 / K^4
+Real kB = 1.380658e-16; // erg / K
+Real mH = 1.6733e-24; // g
+Real X,Y,Z; // mass fractions composition
+
+//int rotation_mode; // setting for rotation 1 = solid body, 2 = experimental, differential
+bool diff_rot_exp;
+
+bool update_gm2_sep; //change gm2 as a function of separation
+Real dmin = 1.e99;
 
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
@@ -158,10 +181,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Ggrav = pin->GetOrAddReal("problem","Ggrav",6.67408e-8);
   GM2 = pin->GetOrAddReal("problem","GM2",0.0);
   //GM1 = pin->GetOrAddReal("problem","GM1",1.0);
+  GM2i = GM2; // set initial GM2
 
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
   tau_relax_start = pin->GetOrAddReal("problem","tau_relax_start",1.0);
+  tau_relax_end = pin->GetOrAddReal("problem","tau_relax_end",100.0);
   t_mass_on = pin->GetOrAddReal("problem","t_mass_on",0.0);
   corotating_frame = pin->GetInteger("problem","corotating_frame");
 
@@ -182,19 +207,38 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   Omega_orb_fixed = pin->GetOrAddReal("problem","omega_orb_fixed",0.5);
 
   // separation based ouput, triggered when dt=999. for an output type
-  dsep_output = pin->GetOrAddReal("problem","dsep_output",999.);
+  dsep_output = pin->GetOrAddReal("problem","dsep_output",1.0);
   Real output_next_sep_max = pin->GetOrAddReal("problem","output_next_sep_max",1.0);
   output_next_sep = output_next_sep_max;
 
   // gravity
   update_grav_every = pin->GetOrAddInteger("problem","update_grav_every",1);
-
+  rstar_initial = pin->GetReal("problem","rstar_initial");  // FOR RESCALING OF STELLAR PROFILE
+  mstar_initial = pin->GetReal("problem","mstar_initial");
+  
   // background
   inert_bg = pin->GetOrAddBoolean("problem","inert_bg",false);
-  
-  // start time 
-  time_start = pin->GetOrAddReal("time","start_time",0.0);
 
+  // cooling parameters
+  cooling = pin->GetOrAddBoolean("problem","cooling",false);
+  Lstar = pin->GetOrAddReal("problem","lstar",4.e33);
+  mykappa = pin->GetOrAddReal("problem","kappa",1e-3);
+  fvir = pin->GetOrAddReal("problem","fvir",0.1);
+
+  X = pin->GetOrAddReal("problem","X",0.7);
+  Z = pin->GetOrAddReal("problem","Z",0.02);
+  Y = 1.0 - X - Z;
+
+  // rotation mode
+  //rotation_mode = pin->GetOrAddInteger("problem","rotation_mode",1);
+  //eps_rot = pin->GetOrAddReal("problem","eps_rot",0.0);
+  diff_rot_exp = pin->GetOrAddReal("problem","diff_rot_exp",0.0);
+
+  // gm2 decrease
+  update_gm2_sep = pin->GetOrAddBoolean("problem","update_gm2_sep",false);
+  
+
+ 
 
   // local vars
   Real rmin = pin->GetOrAddReal("mesh","x1min",0.0);
@@ -227,7 +271,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // Enroll AMR
   if(adaptive==true)
-    EnrollUserRefinementCondition(RefinementCondition);
+    EnrollUserRefinementCondition(RefinementConditionR0);
 
   // Enroll extra history output
   //AllocateUserHistoryOutput(8);
@@ -254,12 +298,20 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   }
   infile.close();
 
+  // RESCALE
+  for(int i=0;i<NARRAY;i++){
+    rad[i] = rad[i]*rstar_initial;
+    rho[i] = rho[i]*mstar_initial/pow(rstar_initial,3);
+    p[i]   = p[i]*Ggrav*pow(mstar_initial,2)/pow(rstar_initial,4);
+    menc_init[i] = menc_init[i]*mstar_initial;
+  }
+
   
   
   // set the inner point mass based on excised mass
   Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin, NARRAY );
   GM1 = Ggrav*menc_rin;
-  Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
+  Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01*rstar_initial, NARRAY) - GM1;
 
 
   // allocate the enclosed mass profile
@@ -275,7 +327,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     
 
   //ONLY enter ICs loop if this isn't a restart
-  if(time-time_start==0){
+  if(time==0){
     if(fixed_orbit){
       sma_fixed = pow((GM1+GM2+GMenv)/(Omega_orb_fixed*Omega_orb_fixed),1./3.);
       xi[0] = sma_fixed;
@@ -346,15 +398,17 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "==========================================================\n";
     std::cout << "==========   SIMULATION INFO =============================\n";
     std::cout << "==========================================================\n";
-    std::cout << "mode =" << mode << "\n";
     std::cout << "time =" << time << "\n";
     std::cout << "Ggrav = "<< Ggrav <<"\n";
     std::cout << "gamma = "<< gamma_gas <<"\n";
     std::cout << "GM1 = "<< GM1 <<"\n";
     std::cout << "GM2 = "<< GM2 <<"\n";
     std::cout << "GMenv="<< GMenv << "\n";
+    std::cout << "rstar_initial = "<< rstar_initial<<"\n";
+    std::cout << "mstar_initial = "<< mstar_initial<<"\n";
     std::cout << "Omega_orb="<< Omega_orb << "\n";
     std::cout << "Omega_env="<< Omega_envelope << "\n";
+    std::cout << "vphi_eq = "<< Omega_envelope*rstar_initial<<"\n";
     std::cout << "a = "<< sma <<"\n";
     std::cout << "e = "<< ecc <<"\n";
     std::cout << "P = "<< 6.2832*sqrt(sma*sma*sma/(GM1+GM2+GMenv)) << "\n";
@@ -378,6 +432,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
     std::cout << "vy ="<<vi[1]<<"\n";
     std::cout << "vz ="<<vi[2]<<"\n";
     std::cout << "==========================================================\n";
+    std::cout << "cooling = " << cooling <<"\n";
+    std::cout << "==========================================================\n";
   }
   
     
@@ -385,6 +441,30 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 } // end
 
+
+int RefinementConditionR0(MeshBlock *pmb)
+{
+  Real r0_ref_thresh=0.1;
+  Real maxr0 = 0.0;
+  Real maxr  = 0.0;
+  for(int k=pmb->ks; k<=pmb->ke; k++){
+    for(int j=pmb->js; j<=pmb->je; j++) {
+      for(int i=pmb->is; i<=pmb->ie; i++) {
+        Real r = pmb->pcoord->x1v(i);
+        Real r0 = pmb->pscalars->r(0,k,j,i);
+        maxr  = std::max(maxr,  r);
+        maxr0 = std::max(maxr0, r0);
+      }
+    }
+  }
+  // derefine when away from pm & static region                                                                                                                                                              
+  if( maxr0 < r0_ref_thresh*0.5  ) return -1;
+  // refine near point mass                                                                                                                                                                                   
+  if( (maxr > rstar_initial) && (maxr0 > r0_ref_thresh)  ) return 1;
+  // otherwise do nothing                                                                                                                                                                                    
+  return 0;
+
+}
 
 
 
@@ -429,13 +509,13 @@ Real GetGM2factor(Real time){
   Real GM2_factor;
 
   // turn the gravity of the secondary on over time...
-  if(time-time_start<t_relax+t_mass_on){
-    if(time-time_start<t_relax){
+  if(time<t_relax+t_mass_on){
+    if(time<t_relax){
       // if t<t_relax, do not apply the acceleration of the secondary to the gas
       GM2_factor = 0.0;
     }else{
       // turn on the gravity of the secondary over the course of t_mass_on after t_relax
-      GM2_factor = (time-time_start-t_relax)/t_mass_on;
+      GM2_factor = (time-t_relax)/t_mass_on;
     }
   }else{
     // if we're outside of the relaxation times, turn the gravity of the secondary fully on
@@ -444,6 +524,30 @@ Real GetGM2factor(Real time){
   
   return GM2_factor;
 }
+
+void updateGM2(Real sep){
+  GM2 = GM2i*std::min(sep/rstar_initial, 1.0); // linear decrease with separation
+}
+
+
+
+/// Cooling functions
+Real kappa(Real rho, Real T)
+{
+  // From G. Knapp A403 Princeton Course Notes
+  //Real Kes = 0.2*(1.0+X);
+  //Real Ke = 0.2*(1.0+X)/((1.0+2.7e11*rho/(T*T))*(1.0+ pow((T/4.5e8),0.86) ));
+  //Real Kk = 4.e25*(1+X)*(Z+1.e-3)*rho*pow(T,-3.5);
+  //Real Khm = 1.1e-25*sqrt(Z) *sqrt(rho) * pow(T,7.7);
+  //Real Km = 0.1*Z;
+  // Real Krad = Km + 1.0/(1.0/Khm + 1.0/(Ke+Kk) );
+  //return Krad;
+  return mykappa;
+}
+
+
+
+
 
 
 
@@ -605,6 +709,41 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
 	//cons(IEN,k,j,i) += src_3/den * 0.5*(flux[X3DIR](IDN,k,j,i) + flux[X3DIR](IDN,k+1,j,i));
 	cons(IEN,k,j,i) += src_2*prim(IVY,k,j,i) + src_3*prim(IVZ,k,j,i);
 
+
+	
+	// APPLY LOCAL COOLING FUNCTION
+	if(cooling){
+	  Real denr0 = pmb->pscalars->r(0,k,j,i) * den;
+	  //Real Hp = std::abs(prim(IPR,k,j,i)/( (prim(IPR,k,j,i+1)-prim(IPR,k,j,i-1))/(pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1)) ));
+	  //Hp = std::max(Hp,pmb->pcoord->x1v(i+1)-pmb->pcoord->x1v(i-1) );
+	  
+	  Real Sigma = std::max(denr0*rstar_initial,mH);
+    
+	  
+	  Real mu = 0.61;
+	  Real Temp = prim(IPR,k,j,i) * mu * mH / (den * kB);
+	  Real Teq = fvir*GMenc1*mu*mH/(kB*r);  //pow( Lstar/(4*PI*sigmaSB*r*r), 0.25); // equilibrium temperature
+
+	  Real kap = kappa(den,Temp);
+	  Real tau = Sigma*kap;	  
+	  
+	  Real ueq = kB*Teq/(mu*mH*(gamma_gas-1));  // erg/g
+	  Real u = prim(IPR,k,j,i)/(den*(gamma_gas-1)); // erg/g
+	  	  
+	  Real dudt = 4.0*sigmaSB*( pow(Teq,4) - pow(Temp,4))/(Sigma*tau + 1/kap);  //erg/g/s
+	  Real t_therm = std::max( std::abs((ueq-u)/dudt) , 10.0*(pmb->pmy_mesh->dt) );
+	  
+	  Real exp_step = 1.0 - exp(-(pmb->pmy_mesh->dt) / t_therm);
+	  
+	  //std::cout<<"r="<<r<<"  tau="<<tau<<"  Temp="<<Temp<<"  Teq="<<Teq<<"  t_therm="<<t_therm<<"  exp="<<exp_step<<"\n";
+	  
+	  cons(IEN,k,j,i) +=  denr0*(ueq-u)*exp_step;
+
+	    
+	} // end coooling
+
+	
+
       }
     }
   } // end loop over cells
@@ -653,6 +792,7 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
 
 	
 	Real sin_th = sin(th);
+	Real cos_th = cos(th);
 	Real Rcyl = r*sin_th;
 	
 	// get the density
@@ -669,19 +809,21 @@ void MeshBlock::ProblemGenerator(ParameterInput *pin)
    	// set the momenta components
 	phydro->u(IM1,k,j,i) = 0.0;
 	phydro->u(IM2,k,j,i) = 0.0;
-	if(r <= 1.0){
+
+	
+	if(r <= rstar_initial){
 	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*Rcyl - Omega[2]*Rcyl);
 	}else{
-	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*sin_th*sin_th/Rcyl - Omega[2]*Rcyl);
+	  phydro->u(IM3,k,j,i) = den*(Omega_envelope*pow(rstar_initial*sin_th,2)/Rcyl - Omega[2]*Rcyl);
 	}
-	  
+
 	//set the energy 
 	phydro->u(IEN,k,j,i) = pres/(gamma_gas-1);
 	phydro->u(IEN,k,j,i) += 0.5*(SQR(phydro->u(IM1,k,j,i))+SQR(phydro->u(IM2,k,j,i))
 				     + SQR(phydro->u(IM3,k,j,i)))/phydro->u(IDN,k,j,i);
 
 	// set the scalar
-	if(r<1.0){
+	if(r<rstar_initial){
 	  pscalars->s(0,k,j,i) = 1.0*phydro->u(IDN,k,j,i);
 	}else{
 	  pscalars->s(0,k,j,i) = 1.e-30*phydro->u(IDN,k,j,i);
@@ -707,11 +849,11 @@ void MeshBlock::UserWorkInLoop(void)
 
   // if less than the relaxation time, apply 
   // a damping to the fluid velocities
-  if(time-time_start < t_relax){
+  if(time < t_relax){
     tau = tau_relax_start;
-    Real dex = 2.0-log10(tau_relax_start);
-    if(time-time_start > 0.2*t_relax){
-      tau *= pow(10, dex*(time-time_start-0.2*t_relax)/(0.8*t_relax) );
+    Real dex = log10(tau_relax_end)-log10(tau_relax_start);
+    if(time > 0.2*t_relax){
+      tau *= pow(10, dex*(time-0.2*t_relax)/(0.8*t_relax) );
     }
     if (Globals::my_rank==0){
       std::cout << "Relaxing: tau_damp ="<<tau<<std::endl;
@@ -720,27 +862,33 @@ void MeshBlock::UserWorkInLoop(void)
 
   for (int k=ks; k<=ke; k++) {
     Real ph= pcoord->x3v(k);
-    Real sin_ph = sin(ph);
-    Real cos_ph = cos(ph);
+    //Real sin_ph = sin(ph);
+    //Real cos_ph = cos(ph);
     for (int j=js; j<=je; j++) {
       Real th= pcoord->x2v(j);
-      Real sin_th = sin(th);
-      Real cos_th = cos(th);
+      //Real sin_th = sin(th);
+      //Real cos_th = cos(th);
       for (int i=is; i<=ie; i++) {
 	Real r = pcoord->x1v(i);
+	Real Rcyl = r*sin(th);
 	Real den = phydro->u(IDN,k,j,i);
 	Real GMenc1 = Ggrav*Interpolate1DArrayEven(logr,menc,log10(r) , NGRAV);
 	pscalars->s(7,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot     	
 
-	if (time-time_start<t_relax){
+	if (time<t_relax){
 	  Real vr  = phydro->u(IM1,k,j,i) / den;
 	  Real vth = phydro->u(IM2,k,j,i) / den;
 	  Real vph = phydro->u(IM3,k,j,i) / den;
-	  
+	  Real vphEnv = Omega_envelope*std::min(Rcyl,1.5*rstar_initial) - Omega[2]*Rcyl;
+	  Real vphBg = Omega_envelope*pow(rstar_initial*sin(th),2)/Rcyl - Omega[2]*Rcyl;
+	  Real vphZone = vphBg + pscalars->r(0,k,j,i)*(vphEnv - vphBg);
+
 	  Real a_damp_r =  - vr/tau;
 	  Real a_damp_th = - vth/tau;
-	  Real a_damp_ph = 0.0;
-	  
+	  Real a_damp_ph = - (vph-vphZone)/tau;
+	  //if(pscalars->r(0,k,j,i)>1.e-5){
+	  //  a_damp_ph = - (vph-vphEnv)/tau * pscalars->r(0,k,j,i);
+	  //}
 	  phydro->u(IM1,k,j,i) += dt*den*a_damp_r;
 	  phydro->u(IM2,k,j,i) += dt*den*a_damp_th;
 	  phydro->u(IM3,k,j,i) += dt*den*a_damp_ph;
@@ -759,28 +907,7 @@ void MeshBlock::UserWorkInLoop(void)
 	  pscalars->s(6,k,j,i) = GMenc1*pcoord->coord_src1_i_(i)*den; // neg epot
 	
 	}//end time<t_relax
-
-	// spherical polar coordinates, get local cartesian                                                                                                                                     
-	Real x = r*sin_th*cos_ph;
-	Real y = r*sin_th*sin_ph;
-	Real z = r*cos_th;
-
-	Real d2 = sqrt(pow(x-xi[0], 2) +
-		       pow(y-xi[1], 2) +
-		       pow(z-xi[2], 2) );
-
-	if(d2<rsoft2){
-	  Real tau2 = sqrt(pow(rsoft2,3)/GM2)*(1.0+1e3*pow(d2/rsoft2,3));
-	  tau2 = std::max(10*dt,tau2);
-
-          phydro->u(IM1,k,j,i) -= dt*phydro->u(IM1,k,j,i)/tau2;
-          phydro->u(IM2,k,j,i) -= dt*phydro->u(IM2,k,j,i)/tau2;
-          phydro->u(IM3,k,j,i) -= dt*phydro->u(IM3,k,j,i)/tau2;
-
-          phydro->u(IEN,k,j,i) += dt*SQR(phydro->u(IM1,k,j,i))/(den*tau2) + dt*SQR(phydro->u(IM2,k,j,i))/(den*tau2) + dt*SQR(phydro->u(IM3,k,j,i))/(den*tau2);
-	    
-	}// if close to secondary
-
+	
       }
     }
   } // end loop over cells                   
@@ -828,7 +955,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
       SumComPosVel(pm, xi, vi, xcom, vcom, xcom_star, vcom_star, mg,mg_star);
       //Real GMenv = Ggrav*mg;
-      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01, NARRAY) - GM1;
+      Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01*rstar_initial, NARRAY) - GM1;
 
       
       for (int ii=1; ii<=1e8; ii++) {
@@ -860,7 +987,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     
   // EVOLVE THE ORBITAL POSITION OF THE SECONDARY
   // do this on rank zero, then broadcast
-  if (Globals::my_rank == 0 && time-time_start>t_relax){
+  if (Globals::my_rank == 0 && time>t_relax){
     if(fixed_orbit){
       Real theta_orb = Omega_orb_fixed*time;
       xi[0] = sma_fixed*std::cos(theta_orb);
@@ -898,6 +1025,10 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   // check the separation stopping conditions
   Real d = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2] );
+  if(d<dmin){
+    dmin=d;
+  }
+
   if (d<separation_stop_min){ 
     if (Globals::my_rank == 0) {
       std::cout << "### Stopping because binary separation d<separation_stop_min" << std::endl
@@ -923,20 +1054,25 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     if (Globals::my_rank == 0) {
       std::cout << "triggering user separation based output, d="<<d<<"\n";
     } 
+    output_next_sep = floor(d/dsep_output)*dsep_output; // rounds to the nearest lower sep
   }
-  output_next_sep = floor(d/dsep_output)*dsep_output; // rounds to the nearest lower sep
+  
   
   // sum the enclosed mass profile for monopole gravity
   if(ncycle%update_grav_every == 0){
     SumMencProfile(pm,menc);
     if (Globals::my_rank == 0 ){
-      std::cout << "enclosed mass updated... Menc(r=1) = " << Interpolate1DArrayEven(logr,menc,0.0, NGRAV) <<"\n";
+      std::cout << "enclosed mass updated... Menc(r=rstar_initial) = " << Interpolate1DArrayEven(logr,menc,log10(rstar_initial), NGRAV) <<"\n";
     }
   }
 
+  // modify GM2 if needed
+  if(update_gm2_sep){
+    updateGM2(dmin);
+  }
   
   // sum the gas->part accel for the next step
-  if(include_gas_backreaction == 1 && time-time_start>t_relax){
+  if(include_gas_backreaction == 1 && time>t_relax){
     SumGasOnParticleAccels(pm, xi,agas1i,agas2i);
   }
   
@@ -1608,10 +1744,10 @@ void SumTrackfileDiagnostics(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
 	  if(instar(phyd->u(IDN,k,j,i),r)==true){
 	    M_star += dm;
 	  }
-	  if(r<1.0){
+	  if(r<1.0*rstar_initial){
 	    mr1 += dm;
 	  }
-	  if(r<1.2){
+	  if(r<1.2*rstar_initial){
 	    mr12 += dm;
 	  }
 
@@ -1974,5 +2110,5 @@ void cross(Real (&A)[3],Real (&B)[3],Real (&AxB)[3]){
 
 
 bool instar(Real den, Real r){
-  return ((den>1.e-4) & (r<2));
+  return ((den>1.e-3*mstar_initial/pow(rstar_initial,3) ) & (r<2*rstar_initial));
 }
