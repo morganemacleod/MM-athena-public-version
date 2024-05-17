@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <iostream>
 #include <sstream>
+#include <limits>
 
 // Athena++ headers
 #include "../athena.hpp"
@@ -69,7 +70,7 @@ void Mesh::LoadBalancingAndAdaptiveMeshRefinement(ParameterInput *pin) {
 void Mesh::CalculateLoadBalance(double *clist, int *rlist, int *slist, int *nlist,
                                 int nb) {
   std::stringstream msg;
-  double real_max  =  std::numeric_limits<double>::max();
+  double real_max  = std::numeric_limits<double>::max();
   double totalcost = 0, maxcost = 0.0, mincost = (real_max);
 
   for (int i=0; i<nb; i++) {
