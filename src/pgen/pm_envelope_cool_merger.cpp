@@ -160,6 +160,9 @@ bool diff_rot_exp;
 bool update_gm2_sep; //change gm2 as a function of separation
 Real dmin = 1.e99;
 
+Real r_frac_merge,tdyn_frac_merge; // damp the secondary into the core at this fraction of the rstar_initial
+
+
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -233,9 +236,12 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   //eps_rot = pin->GetOrAddReal("problem","eps_rot",0.0);
   diff_rot_exp = pin->GetOrAddReal("problem","diff_rot_exp",0.0);
 
-  // gm2 decrease
+  // gm2 decrease with separation inside rstar
   update_gm2_sep = pin->GetOrAddBoolean("problem","update_gm2_sep",false);
-  
+
+  // merge gm2 into gm1 at a given separation (frac of rstar_initial)
+  r_frac_merge = pin->GetOrAddReal("problem","r_frac_merge",0.0);
+  tdyn_frac_merge = pin->GetOrAddReal("problem","tdyn_frac_merge",0.1);
 
  
 
@@ -822,6 +828,16 @@ void MeshBlock::UserWorkInLoop(void)
   Real dt = pmy_mesh->dt;
   Real tau;
 
+  // Add timestep diagnostics
+  if(pmy_mesh->ncycle % 10 == 0){
+    if(new_block_dt_ == pmy_mesh->dt){
+      // call NewBlockTimeStep with extra diagnostic output
+      phydro->NewBlockTimeStep(1);
+    }
+  }  
+
+
+  
   // if less than the relaxation time, apply 
   // a damping to the fluid velocities
   if(time < t_relax){
@@ -1265,6 +1281,15 @@ void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
   if(include_gas_backreaction == 1){
     for (int i = 0; i < 3; i++){
       ai[i]   += -agas1i[i]+agas2i[i];
+    }
+  }
+
+  // add an extra damping term to merge pair of particles
+  if(d<rstar_initial*r_frac_merge){
+    Real v = sqrt(vi[0]*vi[0] + vi[1]*vi[1] + vi[2]*vi[2]);
+    Real tau_merge = tdyn_frac_merge*sqrt(pow(rstar_initial*r_frac_merge,3)/(GM1+GM2));
+    for (int i = 0; i < 3; i++){
+      ai[i] += -vi[i]/tau_merge;
     }
   }
 
