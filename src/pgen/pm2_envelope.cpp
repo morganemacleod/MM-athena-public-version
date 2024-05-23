@@ -634,47 +634,6 @@ int RefinementCondition(MeshBlock *pmb)
 }
 
 
-// int RefinementCondition(MeshBlock *pmb)
-// {
-//   Real mindist=1.e99;
-//   int inregion = 0;
-//   for(int k=pmb->ks; k<=pmb->ke; k++){
-//     Real ph= pmb->pcoord->x3v(k);
-//     Real sin_ph = sin(ph);
-//     Real cos_ph = cos(ph);
-//     for(int j=pmb->js; j<=pmb->je; j++) {
-//       Real th= pmb->pcoord->x2v(j);
-//       Real sin_th = sin(th);
-//       Real cos_th = cos(th);
-//       for(int i=pmb->is; i<=pmb->ie; i++) {
-// 	Real r = pmb->pcoord->x1v(i);
-// 	Real x = r*sin_th*cos_ph;
-// 	Real y = r*sin_th*sin_ph;
-// 	Real z = r*cos_th;
-// 	Real dist = std::sqrt(SQR(x-xi[0]) +
-// 			      SQR(y-xi[1]) +
-// 			      SQR(z-xi[2]) );
-// 	mindist = std::min(mindist,dist);
-
-// 	if( (r >= x1_min_level1)  && (r <= x1_max_level1) &&
-// 	    (th >= x2_min_level1) && (th<= x2_max_level1)){
-// 	  inregion += 1;
-// 	}
-	
-//       }
-//     }
-//   }
-//   // derefine when away from pm & static region
-//   if( (mindist > 6.0*rsoft2) && inregion==0  ) return -1;
-//   // refine near point mass 
-//   if(mindist <= 3.0*rsoft2) return 1;
-//   // refine in region (by 1 level)
-//   if((inregion>0) && (pmb->loc.level == pmb->pmy_mesh->root_level)) return 1;
-//   // otherwise do nothing
-//   return 0;
-// }
-
-
 Real GetGM2factor(Real time){
   Real GM2_factor;
 
@@ -729,20 +688,6 @@ void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaA
   }
   
   Real GM2_factor = GetGM2factor(time);
-
-  // // decide whether or not to use the -a_gas_1 source term
-  // // we don't apply this if unless it's important because it can sometimes strongly destabilize the HSE envelope
-  // int agas1_source = 0;
-  // if(include_gas_backreaction==1){
-  //   Real a2m = sqrt(agas2i[0]*agas2i[0] + agas2i[1]*agas2i[1] + agas2i[2]*agas2i[2]);
-  //   Real a1m = sqrt(agas1i[0]*agas1i[0] + agas1i[1]*agas1i[1] + agas1i[2]*agas1i[2]);
-    
-  //   if (a2m>0 && a1m/a2m > agas1_source_rel_thresh){
-  //     //std::cout<< "applying agas1_source!\n"<< Globals::my_rank <<" "<<a1m<<"  "<<a2m<<"\n";
-  //     agas1_source=1;
-  //   }
-  // }
-  
 
   // Gravitational acceleration from orbital motion
   for (int k=pmb->ks; k<=pmb->ke; k++) {
@@ -1009,60 +954,15 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   // (NOTE: DOESN'T WORK WITH RESTARTS)
   if(ncycle==0){
     // kick the initial conditions back a half step (v^n-1/2)
-
     // first sum the gas accel if needed
     if(include_gas_backreaction == 1){
       SumGasOnParticleAccels(pm, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
     }
-
     ParticleAccels(xi_a,xi_b,vi_a,vi_b,ai_a,ai_b);
     kick(-0.5*dt,xi_a,vi_a,ai_a);
     kick(-0.5*dt,xi_b,vi_b,ai_b);
-
-    // Integrate from apocenter to separation_start
-    if( do_pre_integrate ) {
-      // Real sep,vel,dt_pre_integrator;
-      // int n_steps_pre_integrator;
-
-      // SumComPosVel(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, mg);
-      // Real GMenv = Ggrav*mg;
-      
-      
-      // for (int ii=1; ii<=1e8; ii++) {
-      // 	sep = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2]);
-      // 	vel = sqrt(vi[0]*vi[0] + vi[1]*vi[1] + vi[2]*vi[2]);
-      // 	dt_pre_integrator = 1.e-4 * sep/vel;
-      // 	// check stopping condition
-      // 	n_steps_pre_integrator = ii;
-      // 	if (sep<separation_start) break;
-	
-      // 	// add the particle acceleration to ai
-      // 	ParticleAccelsPreInt(GMenv,xi,vi,ai);
-      // 	// advance the particle
-      // 	particle_step(dt_pre_integrator,xi,vi,ai);
-      // }
-
-      // if (Globals::my_rank==0){
-      // 	std::cout << "Integrated to starting separation:"<<sep<<"\n";
-      // 	std::cout << " in "<<n_steps_pre_integrator<<" steps\n";
-      // 	if( std::abs(sep-separation_start) > 1.e-2*separation_start){
-      // 	  std::cout << "Pre-integrator failed!!! Exiting. \n";
-      // 	  SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit
-      // 	}	
-      // }
-
-       if (Globals::my_rank==0){
-	 std::cout << "pre_integrate disabled!!\n";
-       }
-
-    }
-
-
-
-
-    
   }
-    
+
   // EVOLVE THE ORBITAL POSITION OF THE SECONDARY
   // do this on rank zero, then broadcast
   if (Globals::my_rank == 0 && time>t_relax){
@@ -1074,6 +974,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       particle_step(dt/n_particle_substeps,xi_b,vi_b,ai_b);
     }
   }
+  
   
 #ifdef MPI_PARALLEL
   // broadcast the position update from proc zero
@@ -1101,8 +1002,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
       std::cout << "### Stopping because binary separation d<separation_stop_min" << std::endl
 		<< "d= " << d << " separation_stop_min="<<separation_stop_min<<std::endl;
     }
-    SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit
-    
+    SignalHandler::SetSignalFlag(SIGTERM); // make a clean exit    
   }
 
   if (d>separation_stop_max){ 
@@ -1116,15 +1016,14 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   
   // sum the gas->part accel for the next step
   if(include_gas_backreaction == 1 && time>t_relax){
-    SumGasOnParticleAccels(pblock->pmy_mesh, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
+    SumGasOnParticleAccels(pm, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
   }
   
   
   // write the output to the trackfile
   if(time >= trackfile_next_time){
-    SumComPosVel(pblock->pmy_mesh, xi_a,xi_b, vi_a,vi_b, xgcom, vgcom, xcom, vcom, mg);
-    //SumAngularMomentumEnergyDiagnostic(pblock->pmy_mesh, xi, vi, xgcom, vgcom, xcom, vcom, lp, lg, ldo, Eorb);
-    WritePMTrackfile(pblock->pmy_mesh,pin);
+    SumComPosVel(pm, xi_a,xi_b, vi_a,vi_b, xgcom, vgcom, xcom, vcom, mg);
+    WritePMTrackfile(pm,pin);
   }
 
 }
@@ -1179,10 +1078,6 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
       fprintf(pfile,"vxcom            ");
       fprintf(pfile,"vycom            ");
       fprintf(pfile,"vzcom            ");
-      //fprintf(pfile,"lpz             ");
-      //fprintf(pfile,"lgz             ");
-      //fprintf(pfile,"ldoz            ");
-      //fprintf(pfile,"Eorb            ");
       fprintf(pfile,"\n");
     }
 
@@ -1221,10 +1116,6 @@ void WritePMTrackfile(Mesh *pm, ParameterInput *pin){
     fprintf(pfile,"%20.6e",vcom[0]);
     fprintf(pfile,"%20.6e",vcom[1]);
     fprintf(pfile,"%20.6e",vcom[2]);
-    //fprintf(pfile,"%20.6e",lp[2]);
-    //fprintf(pfile,"%20.6e",lg[2]);
-    //fprintf(pfile,"%20.6e",ldo[2]);
-    //fprintf(pfile,"%20.6e",Eorb);
     fprintf(pfile,"\n");
 
     // close the file
@@ -1421,7 +1312,6 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1
 	}
       }
     }//end loop over cells
-    pmb=pmb->next;
   }//end loop over meshblocks
 
 #ifdef MPI_PARALLEL
@@ -1463,14 +1353,16 @@ void SumComPosVel(Mesh *pm,
     xgcom[ii] = 0.0;
     vgcom[ii] = 0.0;
   }
-  
-  MeshBlock *pmb=pm->pblock;
+
   AthenaArray<Real> vol;
+  MeshBlock *pmb=pm->my_blocks(0);
   
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
   vol.NewAthenaArray(ncells1);
 
-  while (pmb != NULL) {
+  // Loop over MeshBlocks
+  for (int b=0; b<pm->nblocal; ++b) {
+    pmb = pm->my_blocks(b);
     Hydro *phyd = pmb->phydro;
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
@@ -1527,7 +1419,6 @@ void SumComPosVel(Mesh *pm,
 	}
       }
     }//end loop over cells
-    pmb=pmb->next;
   }//end loop over meshblocks
 
 #ifdef MPI_PARALLEL
