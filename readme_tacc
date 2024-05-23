@@ -1,2 +1,7 @@
- python configure_tacc.py --prob planet_wind_lambda_star_origin --coord spherical_polar -mpi -hdf5 --hdf5_path /opt/apps/intel18/impi18_0/phdf5/1.10.4/x86_64 --cxx icc --cflag "$TACC_VEC_FLAGS" --nscalars=1
+ python configure_tacc.py --prob planet_wind_lambda_star_origin --coord spherical_polar -mpi -hdf5 --hdf5_path /opt/apps/intel18/impi18_0/phdf5/1.10.4/x86_64 --cxx icc --cflag "$TACC_VEC_FLAGS"
+ --nscalars=1
+
+python configure_tacc.py --prob pm_envelope_cool_merger --coord spherical_polar -mpi -hdf5 --hdf5_path $TACC_HDF5_DIR --cxx icc --nscalars=8 --mpiccmd mpiicpc
+
+python configure_tacc.py --prob pm2_envelope --coord spherical_polar -mpi -hdf5 --hdf5_path $TACC_HDF5_DIR --cxx icc --mpiccmd mpiicpc
 

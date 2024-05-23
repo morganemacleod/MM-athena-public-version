@@ -47,21 +47,11 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,Face
 		 Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
 
 
-void HSEInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
+void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim,
+		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
+		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar); 
 
-void DiodeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		  FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
-
-void DiodeOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		  FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
-
-void FixedBoundary(MeshBlock *pmb, Coordinates *pcoord, AthenaArray<Real> &prim,
-		   FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh);
-
-
-void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
-                  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons);
 
 
 void ParticleAccels(Real (&xi_a)[3],Real (&xi_b)[3],Real (&vi_a)[3],Real (&vi_b)[3],Real (&ai_a)[3],Real (&ai_b)[3]);
@@ -210,22 +200,11 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   ruser_mesh_data[3].NewAthenaArray(3);
   ruser_mesh_data[4].NewAthenaArray(3);
   
-  
   // enroll the BCs
-  if(mesh_bcs[OUTER_X1] == GetBoundaryFlag("user")) {
-    EnrollUserBoundaryFunction(OUTER_X1, DiodeOuterX1);
+  if(mesh_bcs[BoundaryFace::outer_x1] == GetBoundaryFlag("user")) {
+    EnrollUserBoundaryFunction(BoundaryFace::outer_x1, DiodeOuterX1);
   }
-  if(mesh_bcs[INNER_X1] == GetBoundaryFlag("user")) {
-    EnrollUserBoundaryFunction(INNER_X1, HSEInnerX1);
-  }
-
-  if(mesh_bcs[INNER_X2] == GetBoundaryFlag("user")) {
-    EnrollUserBoundaryFunction(INNER_X2, DiodeInnerX2);
-  }
-  if(mesh_bcs[OUTER_X2] == GetBoundaryFlag("user")) {
-    EnrollUserBoundaryFunction(OUTER_X2, DiodeOuterX2);
-  }
-
+  
 
   // Enroll a Source Function
   EnrollUserExplicitSourceFunction(TwoPointMass);
@@ -719,8 +698,10 @@ Real GetGM2factor(Real time){
 
 
 // Source Function for two point masses
-void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt, const AthenaArray<Real> *flux,
-		  const AthenaArray<Real> &prim, const AthenaArray<Real> &bcc, AthenaArray<Real> &cons)
+void TwoPointMass(MeshBlock *pmb, const Real time, const Real dt,  const AthenaArray<Real> *flux,
+		  const AthenaArray<Real> &prim,
+		  const AthenaArray<Real> &prim_scalar, const AthenaArray<Real> &bcc,
+		  AthenaArray<Real> &cons, AthenaArray<Real> &cons_scalar)
 { 
 
   if(is_restart>0){
@@ -1022,6 +1003,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
   Real ai_a[3],ai_b[3];
   Real mg;
+  Mesh *pm = my_blocks(0)->pmy_mesh;
 
   // ONLY ON THE FIRST CALL TO THIS FUNCTION
   // (NOTE: DOESN'T WORK WITH RESTARTS)
@@ -1030,7 +1012,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
 
     // first sum the gas accel if needed
     if(include_gas_backreaction == 1){
-      SumGasOnParticleAccels(pblock->pmy_mesh, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
+      SumGasOnParticleAccels(pm, xi_a,xi_b,agas1i,agas2i_a,agas2i_b);
     }
 
     ParticleAccels(xi_a,xi_b,vi_a,vi_b,ai_a,ai_b);
@@ -1379,14 +1361,16 @@ void SumGasOnParticleAccels(Mesh *pm, Real (&xi_a)[3],Real (&xi_b)[3],Real (&ag1
     ag2i_a[ii] = 0.0;
     ag2i_b[ii] = 0.0;
   }
-  
-  MeshBlock *pmb=pm->pblock;
+
+  MeshBlock *pmb=pm->my_blocks(0);
   AthenaArray<Real> vol;
   
   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
   vol.NewAthenaArray(ncells1);
 
-  while (pmb != NULL) {
+ // Loop over MeshBlocks
+  for (int b=0; b<pm->nblocal; ++b) {
+    pmb = pm->my_blocks(b);
     Hydro *phyd = pmb->phydro;
 
     // Sum history variables over cells.  Note ghost cells are never included in sums
@@ -1579,175 +1563,6 @@ void SumComPosVel(Mesh *pm,
 
 
 
-// void SumAngularMomentumEnergyDiagnostic(Mesh *pm, Real (&xi)[3], Real (&vi)[3],
-// 				     Real (&xgcom)[3],Real (&vgcom)[3],
-// 				     Real (&xcom)[3],Real (&vcom)[3],
-// 					Real (&lp)[3],Real (&lg)[3],Real (&ldo)[3], Real &Eorb){
-
-//   // NOW COMPUTE THE ANGULAR MOMENTA
-//   Real m1 = GM1/Ggrav;
-//   Real m2 = GM2/Ggrav;
-//   Real d12 = sqrt(xi[0]*xi[0] + xi[1]*xi[1] + xi[2]*xi[2]);
-
- 
-//   // start by setting accelerations / positions to zero
-//   Eorb = 0.0;
-//   Real Mg = 0.0;
-//   for (int ii = 0; ii < 3; ii++){
-//     lg[ii]  = 0.0;
-//     lp[ii]  = 0.0;
-//     ldo[ii] = 0.0;
-//   }
-  
-//   // loop over cells here
-//   MeshBlock *pmb=pm->pblock;
-//   AthenaArray<Real> vol;
-  
-//   int ncells1 = pmb->block_size.nx1 + 2*(NGHOST);
-//   vol.NewAthenaArray(ncells1);
-  
-//   while (pmb != NULL) {
-//     Hydro *phyd = pmb->phydro;
-
-//     // Sum history variables over cells.  Note ghost cells are never included in sums
-//     for (int k=pmb->ks; k<=pmb->ke; ++k) {
-//       for (int j=pmb->js; j<=pmb->je; ++j) {
-// 	pmb->pcoord->CellVolume(k,j,pmb->is,pmb->ie,vol);
-// 	for (int i=pmb->is; i<=pmb->ie; ++i) {
-// 	  // cell mass dm
-// 	  Real dm = vol(i) * phyd->u(IDN,k,j,i);
-
-// 	  // outer-r face area of cell i
-// 	  Real dA = pmb->pcoord->GetFace1Area(k,j,i+1);
-	  	  
-// 	  //coordinates
-// 	  Real r = pmb->pcoord->x1v(i);
-// 	  Real th= pmb->pcoord->x2v(j);
-// 	  Real ph= pmb->pcoord->x3v(k);
-
-// 	    //get some angles
-// 	  Real sin_th = sin(th);
-// 	  Real cos_th = cos(th);
-// 	  Real sin_ph = sin(ph);
-// 	  Real cos_ph = cos(ph);
-	  
-	 
-// 	  // spherical velocities
-// 	  Real vr =  phyd->u(IM1,k,j,i) / phyd->u(IDN,k,j,i);
-// 	  Real vth =  phyd->u(IM2,k,j,i) / phyd->u(IDN,k,j,i);
-// 	  Real vph =  phyd->u(IM3,k,j,i) / phyd->u(IDN,k,j,i);
-
-// 	  // Correct for rotation of the frame? [TBDW]
-
-	  
-// 	  // spherical polar coordinates, get local cartesian           
-// 	  Real x = r*sin_th*cos_ph;
-// 	  Real y = r*sin_th*sin_ph;
-// 	  Real z = r*cos_th;
-
-// 	  // get the cartesian velocities from the spherical (vector)
-// 	  Real vgas[3];
-// 	  vgas[0] = sin_th*cos_ph*vr + cos_th*cos_ph*vth - sin_ph*vph;
-// 	  vgas[1] = sin_th*sin_ph*vr + cos_th*sin_ph*vth + cos_ph*vph;
-// 	  vgas[2] = cos_th*vr - sin_th*vth;
-
-// 	  // do the summation
-// 	  // position rel to COM
-// 	  Real rg[3];
-// 	  rg[0] = x - xcom[0];
-// 	  rg[1] = y - xcom[1];
-// 	  rg[2] = z - xcom[2];
-
-// 	  // momentum rel to COM
-// 	  Real pg[3];
-// 	  pg[0] = dm*(vgas[0] - vcom[0]);
-// 	  pg[1] = dm*(vgas[1] - vcom[1]);
-// 	  pg[2] = dm*(vgas[2] - vcom[2]);
-
-// 	  // rxp
-// 	  Real rxp[3];
-// 	  cross(rg,pg,rxp);
-// 	  for (int ii = 0; ii < 3; ii++){
-// 	    lg[ii] += rxp[ii];
-// 	  }
-
-// 	  // now the flux of angular momentum off of the outer boundary of the grid
-// 	  if(pmb->pcoord->x1f(i+1)==pm->mesh_size.x1max){
-// 	    Real md = phyd->u(IDN,k,j,i)*vr*dA;
-// 	    Real pd[3];
-// 	    pd[0] = md*(vgas[0] - vcom[0]);
-// 	    pd[1] = md*(vgas[1] - vcom[1]);
-// 	    pd[2] = md*(vgas[2] - vcom[2]);
-
-// 	    Real rxpd[3];
-// 	    cross(rg,pd,rxpd);
-// 	    for (int ii = 0; ii < 3; ii++){
-// 	      ldo[ii] += rxpd[ii];
-// 	    }
-// 	  } //endif
-
-
-// 	  // enclosed mass (within current orbital separation)
-// 	  if(r<d12){
-// 	    Mg += dm;
-// 	  }
-	    
-	    
-// 	}
-//       }
-//     }//end loop over cells
-//     pmb=pmb->next;
-//   }//end loop over meshblocks
-
-// #ifdef MPI_PARALLEL
-//   // sum over all ranks
-//   if (Globals::my_rank == 0) {
-//     MPI_Reduce(MPI_IN_PLACE, lg, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-//     MPI_Reduce(MPI_IN_PLACE, ldo, 3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-//     MPI_Reduce(MPI_IN_PLACE, &Mg, 1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-//   } else {
-//     MPI_Reduce(lg,lg,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-//     MPI_Reduce(ldo,ldo,3, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-//     MPI_Reduce(&Mg,&Mg,1, MPI_ATHENA_REAL, MPI_SUM, 0,MPI_COMM_WORLD);
-//   }
-
-//   MPI_Bcast(lg,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-//   MPI_Bcast(ldo,3,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-//   MPI_Bcast(&Mg,1,MPI_ATHENA_REAL,0,MPI_COMM_WORLD);
-// #endif
-
-
-//   // calculate the particle angular momenta
-//   Real r1[3], r2[3], p1[3], p2[3], r1xp1[3], r2xp2[3];
-  
-//   for (int ii = 0; ii < 3; ii++){
-//     r1[ii] = -xcom[ii];
-//     p1[ii] = -m1*vcom[ii];
-
-//     r2[ii] = xi[ii] - xcom[ii];
-//     p2[ii] = m2*(vi[ii] - vcom[ii]);
-//   }
-
-//   cross(r1,p1,r1xp1);
-//   cross(r2,p2,r2xp2);
-
-//   for (int ii = 0; ii < 3; ii++){
-//     lp[ii] = r1xp1[ii] + r2xp2[ii];
-//   }
-
-
-//   // calculate the orbital energy (approximate, I think)
-//   Real v1_sq = vcom[0]*vcom[0] + vcom[1]*vcom[1] + vcom[2]*vcom[2];
-//   Real v2_sq = SQR(vi[0]-vcom[0]) + SQR(vi[1]-vcom[1]) + SQR(vi[2]-vcom[2]);
-//   Eorb = 0.5*(m1+Mg)*v1_sq + 0.5*m2*v2_sq - Ggrav*(m1+Mg)*m2/d12; 
-
-  
-// }
-
-
-
-
-
 //--------------------------------------------------------------------------------------
 //! \fn void OutflowOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
 //                         FaceField &b, Real time, Real dt,
@@ -1809,247 +1624,6 @@ void DiodeOuterX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
   return;
 }
 
-
-//----------------------------------------------------------------------------------------
-// Fixed boundary condition
-// Inputs:
-//   pmb: pointer to MeshBlock
-//   pcoord: pointer to Coordinates
-//   time,dt: current time and timestep of simulation
-//   is,ie,js,je,ks,ke: indices demarkating active region
-// Outputs:
-//   prim: primitives set in ghost zones
-//   bb: face-centered magnetic field set in ghost zones
-// Notes:
-//   does nothing
-
-void FixedBoundary(MeshBlock *pmb, Coordinates *pcoord, AthenaArray<Real> &prim,
-    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
-{
-  return;
-}
-
-
-
-
-void HSEInnerX1(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-		    FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
-{
-
- 
-  
-  for (int k=ks; k<=ke; ++k) {
-    for (int j=js; j<=je; ++j) {
-#pragma simd
-      for (int i=1; i<=(NGHOST); ++i) {
-	prim(IVX,k,j,is-i) = -prim(IVX,k,j,(is+i-1));
-	prim(IVY,k,j,is-i) = prim(IVY,k,j,(is+i-1));
-	prim(IVZ,k,j,is-i) = prim(IVZ,k,j,(is+i-1));
-	prim(IDN,k,j,is-i) = prim(IDN,k,j,(is+i-1));
-
-	Real r = pco->x1v(is-i+1);
-
-	// HSE radial gravity
-	Real geff = pco->coord_src1_i_(is-i+1)*GM1/r;
-
-	// Rotational support
-	Real Rcyl = r*sin(pco->x2v(j));
-	geff +=  - prim(IVZ,k,j,is-i)*prim(IVZ,k,j,is-i)/Rcyl;
-
-	// Rotating frame
-	geff += - Omega[2]*Omega[2]*Rcyl - 2.0*Omega[2]*prim(IVZ,k,j,is-i);
-
-	Real dr = pco->dx1v(is-i);
-	Real dp = geff * prim(IDN,k,j,is-i+1) * dr;
-	
-	prim(IPR,k,j,is-i) = prim(IPR,k,j,(is-i+1)) + dp;
-      }
-    }
-  }
-  
-  // copy face-centered magnetic fields into ghost zones, reflect x1
-  if (MAGNETIC_FIELDS_ENABLED) {
-    for
-      (int k=ks; k<=ke; ++k) { 
-      for (int j=js; j<=je; ++j) { 
-#pragma simd
-	for (int i=1; i<=(NGHOST); ++i) { 
-	  b.x1f(k,j,(is-i)) = -b.x1f(k,j,(is+i  ));  
-	} 
-      }}
-    
-    for (int k=ks; k<=ke; ++k) {
-      for (int j=js; j<=je+1; ++j) {
-#pragma simd
-	for (int i=1; i<=(NGHOST); ++i) {
-	  b.x2f(k,j,(is-i)) =  b.x2f(k,j,(is+i-1));
-	}
-      }}  
-    
-    for (int k=ks; k<=ke+1; ++k) {
-      for (int j=js; j<=je; ++j) {
-#pragma simd
-	for (int i=1; i<=(NGHOST); ++i) {
-	  b.x3f(k,j,(is-i)) =  b.x3f(k,j,(is+i-1));
-	}
-      }}
-  }
-}
-  
-
-
-//----------------------------------------------------------------------------------------
-//! \fn void ReflecInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-//                         FaceField &b, const Real time, const Real dt,
-//                         int is, int ie, int js, int je, int ks, int ke)
-//  \brief REFLECTING boundary conditions, inner x2 boundary
-
-void DiodeInnerX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
-{
-  // copy hydro variables into ghost zones, reflecting v2
-  for (int n=0; n<(NHYDRO); ++n) {
-    if (n==(IVY)) {
-      for (int k=ks; k<=ke; ++k) {
-      for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-        for (int i=is; i<=ie; ++i) {
-          prim(IVY,k,js-j,i) = 0.0; //std::min(0.0,prim(IVY,k,js+j-1,i));  // allow outflow only
-        }
-      }}
-    } else {
-      for (int k=ks; k<=ke; ++k) {
-      for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-        for (int i=is; i<=ie; ++i) {
-          prim(n,k,js-j,i) = prim(n,k,js+j-1,i);
-        }
-      }}
-    }
-  }
-
-  // copy face-centered magnetic fields into ghost zones, reflecting b2
-  if (MAGNETIC_FIELDS_ENABLED) {
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-      for (int i=is; i<=ie+1; ++i) {
-        b.x1f(k,(js-j),i) =  b.x1f(k,(js+j-1),i);
-      }
-    }}
-
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-      for (int i=is; i<=ie; ++i) {
-        b.x2f(k,(js-j),i) = b.x2f(k,(js+j  ),i);  
-      }
-    }}
-
-    for (int k=ks; k<=ke+1; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-      for (int i=is; i<=ie; ++i) {
-        b.x3f(k,(js-j),i) =  b.x3f(k,(js+j-1),i);
-      }
-    }}
-  }
-
-  return;
-}
-
-//----------------------------------------------------------------------------------------
-//! \fn void ReflectOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-//                          FaceField &b, const Real time, const Real dt,
-//                          int is, int ie, int js, int je, int ks, int ke)
-//  \brief REFLECTING boundary conditions, outer x2 boundary
-
-void DiodeOuterX2(MeshBlock *pmb, Coordinates *pco, AthenaArray<Real> &prim,
-     FaceField &b, Real time, Real dt, int is, int ie, int js, int je, int ks, int ke, int ngh)
-{
-  // copy hydro variables into ghost zones, reflecting v2
-  for (int n=0; n<(NHYDRO); ++n) {
-    if (n==(IVY)) {
-      for (int k=ks; k<=ke; ++k) {
-      for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-        for (int i=is; i<=ie; ++i) {
-          prim(IVY,k,je+j,i) = 0.0; //std::max(0.0,prim(IVY,k,je-j+1,i) ); //allow outflow only 
-        }
-      }}
-    } else {
-      for (int k=ks; k<=ke; ++k) {
-      for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-        for (int i=is; i<=ie; ++i) {
-          prim(n,k,je+j,i) = prim(n,k,je-j+1,i);
-        }
-      }}
-    }
-  }
-
-  // copy face-centered magnetic fields into ghost zones, reflecting b2
-  if (MAGNETIC_FIELDS_ENABLED) {
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-      for (int i=is; i<=ie+1; ++i) {
-        b.x1f(k,(je+j  ),i) =  b.x1f(k,(je-j+1),i);
-      }
-    }}
-
-    for (int k=ks; k<=ke; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-      for (int i=is; i<=ie; ++i) {
-        b.x2f(k,(je+j+1),i) = b.x2f(k,(je-j+1),i);  
-      }
-    }}
-
-    for (int k=ks; k<=ke+1; ++k) {
-    for (int j=1; j<=(NGHOST); ++j) {
-#pragma simd
-      for (int i=is; i<=ie; ++i) {
-        b.x3f(k,(je+j  ),i) =  b.x3f(k,(je-j+1),i);
-      }
-    }}
-  }
-
-  return;
-}
-
-
-
-// Real Interpolate1DArray(Real *x,Real *y,Real x0){
-//   int i;
-//   Real d,dx,s,y0;
-//   //std::cout.precision(17);
-  
-
-//   // check the lower bound
-//   if(x[0] >= x0){
-//     //std::cout << "hit lower bound!\n";
-//     return y[0];
-//   }
-//   // check the upper bound
-//   if(x[NARRAY-1] <= x0){
-//     //std::cout << "hit upper bound!\n";
-//     return y[NARRAY-1];
-//   }
-
-//   // if in the interior, do a linear interpolation
-//   for(i=0;i<NARRAY-1;i++){
-//     if (x[i+1] >= x0){
-//       dx =  (x[i+1]-x[i]);
-//       d = (x0 - x[i]);
-//       s = (y[i+1]-y[i]) /dx;
-//       y0 = s*d + y[i];
-//       return y0;
-//     }
-//   }
-//   // should never get here, -9999.9 represents an error
-//   return -9999.9;
-// }
 
 
 // 1D Interpolation that assumes EVEN spacing in x array

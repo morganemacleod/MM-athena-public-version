@@ -793,7 +793,7 @@ void Outputs::MakeOutputs(Mesh *pm, ParameterInput *pin, bool wtflag) {
     if ((pm->time == pm->start_time) ||
         (pm->time >= ptype->output_params.next_time) ||
         (pm->time >= pm->tlim) ||
-	(pm->user_force_output &&  ptype->output_params.dt == 999.) || //MM:allow user condition to force output if dt=999.
+	(pm->user_force_output &&  ptype->output_params.dt == 1e99) || //MM:allow user condition to force output if dt=1e99
         (wtflag && ptype->output_params.file_type=="rst")) {
       if (first && ptype->output_params.file_type!="hst") {
         pm->ApplyUserWorkBeforeOutput(pin);

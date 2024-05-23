@@ -104,7 +104,7 @@ Real da,pa; // ambient density, pressure
 Real rho[NARRAY], p[NARRAY], rad[NARRAY], menc_init[NARRAY];  // initial profile
 Real logr[NGRAV],menc[NGRAV]; // enclosed mass profile
 
-Real GM2, GM1,GM2i; // point masses
+Real GM2, GM1,GM2i,GM1i; // point masses
 Real rsoft2; // softening length of PM 2
 Real t_relax,t_mass_on; // time to damp fluid motion, time to turn on M2 over
 int  include_gas_backreaction, corotating_frame; // flags for output, gas backreaction on EOM, frame choice
@@ -162,7 +162,6 @@ Real dmin = 1.e99;
 
 Real r_frac_merge,tdyn_frac_merge; // damp the secondary into the core at this fraction of the rstar_initial
 
-
 //======================================================================================
 //! \fn void Mesh::InitUserMeshData(ParameterInput *pin)
 //  \brief Function to initialize problem-specific data in mesh class.  Can also be used
@@ -184,7 +183,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   GM2 = pin->GetOrAddReal("problem","GM2",0.0);
   //GM1 = pin->GetOrAddReal("problem","GM1",1.0);
   GM2i = GM2; // set initial GM2
-
+  
+  
   rsoft2 = pin->GetOrAddReal("problem","rsoft2",0.1);
   t_relax = pin->GetOrAddReal("problem","trelax",0.0);
   tau_relax_start = pin->GetOrAddReal("problem","tau_relax_start",1.0);
@@ -316,6 +316,7 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
   // set the inner point mass based on excised mass
   Real menc_rin = Interpolate1DArrayEven(rad,menc_init, rmin, NARRAY );
   GM1 = Ggrav*menc_rin;
+  GM1i = GM1;
   Real GMenv = Ggrav*Interpolate1DArrayEven(rad,menc_init,1.01*rstar_initial, NARRAY) - GM1;
 
 
@@ -507,7 +508,10 @@ Real GetGM2factor(Real time){
 }
 
 void updateGM2(Real sep){
-  GM2 = GM2i*std::min(sep/rstar_initial, 1.0); // linear decrease with separation
+  //GM2 = GM2i*std::min(sep/(rstar_initial*r_frac_merge), 1.0); // linear decrease with separation
+  Real rdec = rstar_initial*r_frac_merge;
+  GM2 = GM2i*(1.0-exp(-pow(sep/rdec,6)));
+  GM1 = GM1i + (GM2i-GM2);
 }
 
 
@@ -1020,6 +1024,14 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
     dmin=d;
   }
 
+  // merger citerion
+  //if(dmin<0.2*r_frac_merge*rstar_initial){
+  //  for(int i=0; i<3; i++){
+  //    xi[i]=0.0;
+  //    vi[i]=0.0;
+  //  }
+  //}
+
   if (d<separation_stop_min){ 
     if (Globals::my_rank == 0) {
       std::cout << "### Stopping because binary separation d<separation_stop_min" << std::endl
@@ -1060,6 +1072,7 @@ void Mesh::MeshUserWorkInLoop(ParameterInput *pin){
   // modify GM2 if needed
   if(update_gm2_sep){
     updateGM2(dmin);
+    n_particle_substeps = 100; // take more substeps if we're in this region
   }
   
   // sum the gas->part accel for the next step
@@ -1258,8 +1271,10 @@ void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
 
   // fill in the accelerations for the orbiting frame
   for (int i = 0; i < 3; i++){
-    ai[i] = - GM1/pow(d,3) * xi[i] - GM2/pow(d,3) * xi[i];
-  } 
+    //ai[i] = - GM1/pow(d,3) * xi[i] - GM2/pow(d,3) * xi[i];
+    ai[i] = -GM1*fspline(d,rsoft2)*xi[i] -GM2*fspline(d,rsoft2)*xi[i];
+  }
+  
   
   // IF WE'RE IN A ROTATING FRAME
   if(corotating_frame == 1){
@@ -1270,7 +1285,7 @@ void ParticleAccels(Real (&xi)[3],Real (&vi)[3],Real (&ai)[3]){
     cross(Omega,Omega_x_r,Omega_x_Omega_x_r);
     cross(Omega,vi,Omega_x_v);
     
-// fill in the accelerations for the rotating frame
+    // fill in the accelerations for the rotating frame
     for (int i = 0; i < 3; i++){
       ai[i] += -Omega_x_Omega_x_r[i];
       ai[i] += -2.0*Omega_x_v[i];
