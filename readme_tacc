@@ -5,3 +5,7 @@ python configure_tacc.py --prob pm_envelope_cool_merger --coord spherical_polar 
 
 python configure_tacc.py --prob pm2_envelope --coord spherical_polar -mpi -hdf5 --hdf5_path $TACC_HDF5_DIR --cxx icc --mpiccmd mpiicpc
 
+June 2024:
+python configure_tacc.py --prob pm2_envelope --coord spherical_polar -mpi -hdf5 --hdf5_path="$TACC_HDF5_DIR" --mpiccmd mpiicpc --cflag="$TACC_VEC_FLAGS"
+
+python configure_tacc.py --prob planet_wind_lambda_star_origin --coord spherical_polar -mpi -hdf5 --hdf5_path="$TACC_HDF5_DIR" --mpiccmd mpiicpc --cflag="$TACC_VEC_FLAGS"
