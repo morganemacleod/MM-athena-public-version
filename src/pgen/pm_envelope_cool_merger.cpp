@@ -130,7 +130,7 @@ int is_restart;
 
 // Static Refinement with AMR Params
 //Real x1_min_level1, x1_max_level1,x2_min_level1, x2_max_level1;
-Real x1_min_derefine;
+Real x1_min_derefine, n_cells_rsoft2;
 
 bool do_pre_integrate;
 bool fixed_orbit;
@@ -203,7 +203,8 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
   // These are used for static refinement when using AMR
   x1_min_derefine = pin->GetOrAddReal("problem","x1_min_derefine",0.0);
-
+  n_cells_rsoft2 =  pin->GetOrAddInteger("problem","n_cells_rsoft2",2);
+  
   // fixed orbit parameters
   fixed_orbit = pin->GetOrAddBoolean("problem","fixed_orbit",false);
   Omega_orb_fixed = pin->GetOrAddReal("problem","omega_orb_fixed",0.5);
@@ -455,6 +456,7 @@ int RefinementCondition(MeshBlock *pmb)
 {
   Real mindist=1.e99;
   Real rmin = 1.e99;
+  Real delta_r_max = std::abs( pmb->pcoord->x1v(pmb->ie) - pmb->pcoord->x1v(pmb->ie -1) );
   int inregion = 0;
   for(int k=pmb->ks; k<=pmb->ke; k++){
     Real ph= pmb->pcoord->x3v(k);
@@ -477,11 +479,11 @@ int RefinementCondition(MeshBlock *pmb)
       }
     }
   }
+  // refine near point mass
+  if((mindist <= 3.0*rsoft2) && (rsoft2/delta_r_max<n_cells_rsoft2) )  return 1;
   // derefine when away from pm & static region
-  if( (mindist > 4.0*rsoft2) && rmin>x1_min_derefine  ) return -1;
-  // refine near point mass 
-  if(mindist <= 3.0*rsoft2) return 1;
-   // otherwise do nothing
+  if( (mindist > 5.0*rsoft2) && rmin>x1_min_derefine  ) return -1;
+  // otherwise do nothing
   return 0;
 }
 
