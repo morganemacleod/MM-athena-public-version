@@ -454,8 +454,10 @@ void Mesh::InitUserMeshData(ParameterInput *pin)
 
 int RefinementCondition(MeshBlock *pmb)
 {
+  Real PI = 3.14159;
   Real mindist=1.e99;
   Real rmin = 1.e99;
+  Real thmindist,polemindist = 1.e99;
   Real delta_r_max = std::abs( pmb->pcoord->x1v(pmb->ie) - pmb->pcoord->x1v(pmb->ie -1) );
   int inregion = 0;
   for(int k=pmb->ks; k<=pmb->ke; k++){
@@ -466,6 +468,8 @@ int RefinementCondition(MeshBlock *pmb)
       Real th= pmb->pcoord->x2v(j);
       Real sin_th = sin(th);
       Real cos_th = cos(th);
+      thmindist = std::min( PI - th, th);
+      polemindist = std::min(polemindist, thmindist);
       for(int i=pmb->is; i<=pmb->ie; i++) {
 	Real r = pmb->pcoord->x1v(i);
 	Real x = r*sin_th*cos_ph;
@@ -479,6 +483,9 @@ int RefinementCondition(MeshBlock *pmb)
       }
     }
   }
+  
+  // protect the pole -- no AMR near polar boundary, not supported! (we disabled an error in mesh, need safeguard here...)
+  if(polemindist < PI/8) return 0;
   // refine near point mass
   if((mindist <= 3.0*rsoft2) && (rsoft2/delta_r_max<n_cells_rsoft2) )  return 1;
   // derefine when away from pm & static region
