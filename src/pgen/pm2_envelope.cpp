@@ -1188,7 +1188,7 @@ void ParticleAccels(Real (&xi_a)[3],Real (&xi_b)[3],Real (&vi_a)[3], Real (&vi_b
   for (int i = 0; i < 3; i++){
     Real a1 =  GM2a/pow(d1a,3) * xi_a[i] + GM2b/pow(d1b,3) * xi_b[i];
     ai_a[i] = - GM1/pow(d1a,3)*xi_a[i] -GM2b/pow(dab,3)*(xi_a[i]-xi_b[i]) - a1;
-    ai_b[i] = - GM1/pow(d1b,3)*xi_b[i] -GM2b/pow(dab,3)*(xi_b[i]-xi_a[i]) - a1;
+    ai_b[i] = - GM1/pow(d1b,3)*xi_b[i] -GM2a/pow(dab,3)*(xi_b[i]-xi_a[i]) - a1;
   } 
   
   // IF WE'RE IN A ROTATING FRAME
